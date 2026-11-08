@@ -128,7 +128,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{}}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
@@ -203,6 +203,10 @@ function mergeProb(k,d){const A=S.problems.find(p=>p.id===k),B=S.problems.find(p
   S.problems=S.problems.filter(p=>p.id!==d);delete S.sel[d];tomb(d);if(selP===d)selP=k;save();render()}
 
 /* ---------- Phase 2 : Pareto par croisement ---------- */
+/* Correction manuelle de la sélection : {v,ts,by}. Elle est annulée par « Revenir au calcul automatique »
+   et par toute modification du tableau de croisement. Les anciennes valeurs (booléens) sont ignorées. */
+function ovr(id){const o=S.sel[id];if(!o||typeof o!=='object')return undefined;return o.ts>(S.selReset||0)?o.v:undefined}
+function resetSel(){S.sel={};S.selReset=Date.now();save();render()}
 function stats(){
   const Pr=S.problems,act={},pas={};Pr.forEach(p=>{act[p.id]=0;pas[p.id]=0});
   for(const k in S.matrix){const[a,b]=k.split('|'),w=+S.matrix[k]||0;if(act[a]!==undefined&&pas[b]!==undefined){act[a]+=w;pas[b]+=w}}
@@ -211,7 +215,7 @@ function stats(){
   const ma=rows.reduce((s,r)=>s+r.act,0)/n,mp=rows.reduce((s,r)=>s+r.pas,0)/n;
   rows.forEach(r=>{r.role=!r.score?'—':r.act>=ma&&r.pas<mp?'Moteur (cause racine)':r.act>=ma?'Relais (central)':r.pas>=mp?'Résultat (conséquence)':'Autonome'});
   rows.sort((a,b)=>b.score-a.score||a.i-b.i);
-  let cum=0;rows.forEach(r=>{const before=cum;r.pct=r.score/total*100;cum+=r.pct;r.cum=Math.min(cum,100);r.auto=before<80&&r.score>0;r.prio=S.sel[r.p.id]!==undefined?S.sel[r.p.id]:r.auto});
+  let cum=0;rows.forEach(r=>{const before=cum;r.pct=r.score/total*100;cum+=r.pct;r.cum=Math.min(cum,100);r.auto=before<80&&r.score>0;const o=ovr(r.p.id);r.manual=o!==undefined;r.prio=r.manual?o:r.auto});
   return rows;
 }
 function paretoSVG(rows){
@@ -224,8 +228,8 @@ function paretoSVG(rows){
   s+=`<polyline points="${pts}" fill="none" stroke="#1d4ed8" stroke-width="2"/>`+rows.map((r,i)=>`<circle cx="${L+i*bw+bw/2}" cy="${T+h*(1-r.cum/100)}" r="3.5" fill="#1d4ed8"/>`).join('');
   return s+'</svg>';
 }
-function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;S.matrix[k]=v;S.mts[k]=Date.now();save();render()}
-function setSel(id,v){S.sel[id]=v;save();render()}
+function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;S.matrix[k]=v;S.mts[k]=Date.now();S.sel={};S.selReset=Date.now();save();render()}
+function setSel(id,v){S.sel[id]={v:!!v,ts:Date.now(),by:cfg.get('author')||''};save();render()}
 function ph2(){
   const Pr=S.problems;if(Pr.length<2)return emptyMsg('Ajoutez au moins deux problèmes en phase 1 pour pouvoir les croiser.');
   const head=Pr.map((p,i)=>`<th title="${esc(p.t)}" style="text-align:center">P${i+1}</th>`).join('');
@@ -235,11 +239,11 @@ function ph2(){
   <p class="mut">Lecture <b>en ligne</b> : « si le problème de la ligne s'aggrave, entraîne-t-il celui de la colonne ? » Cliquez sur une case pour faire varier le lien : <span class="pill">0 aucun</span> <span class="pill o">1 faible</span> <span class="pill o" style="background:#fdba74">2 moyen</span> <span class="pill r">3 fort</span></p>
   <div class="tw"><table><tr><th></th>${head}</tr>${body}</table></div></div>
   <div class="card"><h2>2. Score et diagramme de Pareto</h2>
-  <details><summary>Comment le score est calculé</summary><p class="sm"><b>Influence exercée</b> = somme de la ligne (le problème provoque les autres). <b>Influence reçue</b> = somme de la colonne (il est provoqué par les autres). <b>Score = (exercée + reçue) × gravité</b> : un problème très connecté et grave pèse plus. Rôle : <i>Moteur</i> = exerce beaucoup et subit peu (cause racine) ; <i>Relais</i> = fortement lié dans les deux sens ; <i>Résultat</i> = surtout une conséquence ; <i>Autonome</i> = peu lié. Seuil automatique : problèmes qui cumulent les 80 % du score. Vous pouvez corriger la sélection à la main.</p></details>
+  <details><summary>Comment le score est calculé</summary><p class="sm"><b>Influence exercée</b> = somme de la ligne (le problème provoque les autres). <b>Influence reçue</b> = somme de la colonne (il est provoqué par les autres). <b>Score = (exercée + reçue) × gravité</b> : un problème très connecté et grave pèse plus. Rôle : <i>Moteur</i> = exerce beaucoup et subit peu (cause racine) ; <i>Relais</i> = fortement lié dans les deux sens ; <i>Résultat</i> = surtout une conséquence ; <i>Autonome</i> = peu lié. Seuil automatique : problèmes qui cumulent les 80 % du score. Vous pouvez corriger la sélection à la main (case « Prioritaire ») ; cette correction est annulée dès qu'un lien du tableau est modifié, pour que les priorités suivent toujours le calcul.</p></details>
   ${paretoSVG(rows)}
-  <div class="bar"><b>${np} problème(s) prioritaire(s)</b><button class="btn sm" onclick="S.sel={};save();render()">Revenir au seuil automatique 80 %</button></div>
+  <div class="bar"><b>${np} problème(s) prioritaire(s)</b>${rows.some(r=>r.manual)?`<span class="pill o">Sélection modifiée manuellement (${rows.filter(r=>r.manual).length})</span>`:'<span class="pill g">Sélection calculée automatiquement</span>'}<button class="btn sm" onclick="resetSel()">Revenir au calcul automatique (seuil 80 %)</button></div>
   <div class="tw"><table><tr><th>Rang</th><th>Problème</th><th>Exercée</th><th>Reçue</th><th>Gravité</th><th>Score</th><th>%</th><th>% cumulé</th><th>Rôle</th><th>Prioritaire</th></tr>
-  ${rows.map((r,k)=>`<tr style="${r.prio?'background:#ecfdf5':''}"><td>${k+1}</td><td><b>P${r.i+1}</b> ${esc(r.p.t)}${r.p.by?` <span class="mut sm">· ${esc(r.p.by)}</span>`:''}</td><td>${r.act}</td><td>${r.pas}</td><td>${r.g}</td><td><b>${r.score}</b></td><td>${r.pct.toFixed(1)}</td><td>${r.cum.toFixed(1)}</td><td>${r.role}</td><td><input type="checkbox" style="width:auto" ${r.prio?'checked':''} onchange="setSel('${r.p.id}',this.checked)"></td></tr>`).join('')}</table></div>
+  ${rows.map((r,k)=>`<tr style="${r.prio?'background:#ecfdf5':''}"><td>${k+1}</td><td><b>P${r.i+1}</b> ${esc(r.p.t)}${r.p.by?` <span class="mut sm">· ${esc(r.p.by)}</span>`:''}</td><td>${r.act}</td><td>${r.pas}</td><td>${r.g}</td><td><b>${r.score}</b></td><td>${r.pct.toFixed(1)}</td><td>${r.cum.toFixed(1)}</td><td>${r.role}</td><td><input type="checkbox" style="width:auto" ${r.prio?'checked':''} onchange="setSel('${r.p.id}',this.checked)">${r.manual?' <span class="pill o" title="Modifié manuellement'+(S.sel[r.p.id].by?' par '+esc(S.sel[r.p.id].by):'')+'">manuel</span>':''}</td></tr>`).join('')}</table></div>
   <div class="bar"><button class="btn pri" onclick="go(3)">Passer à l'arbre à problèmes →</button></div></div>`;
 }
 
@@ -546,7 +550,9 @@ function mergeState(L,R){
     const[a,b]=k.split('|');if(!pid.has(a)||!pid.has(b))return;
     const inL=k in(L.matrix||{}),inR=k in(R.matrix||{}),tl=(L.mts||{})[k]||0,tr=(R.mts||{})[k]||0;
     const o=inL&&inR?((tl>tr||(tl===tr&&lw))?L:R):inL?L:R;M.matrix[k]=o.matrix[k];M.mts[k]=(o.mts||{})[k]||0});
-  M.sel={};const sel=dict(R.sel,L.sel);Object.keys(sel).forEach(k=>{if(pid.has(k))M.sel[k]=sel[k]});
+  M.selReset=Math.max(L.selReset||0,R.selReset||0);M.sel={};
+  new Set([...Object.keys(R.sel||{}),...Object.keys(L.sel||{})]).forEach(k=>{if(!pid.has(k))return;const a=(L.sel||{})[k],b=(R.sel||{})[k],ts=o=>o&&typeof o==='object'?(o.ts||0):-1,o=ts(a)>=ts(b)?a:b;
+    if(o&&typeof o==='object'&&o.ts>M.selReset)M.sel[k]=o});
   M.ign=dict(R.ign,L.ign);
   M.tree.nodes=union(R.tree.nodes,L.tree.nodes,n=>n.id).filter(n=>!dead(n.id));
   const nid=new Set(M.tree.nodes.map(n=>n.id));
@@ -555,7 +561,7 @@ function mergeState(L,R){
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca'].forEach(k=>{M[k]=dict(R[k],L[k])});
   return M}
-const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
+const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
 async function syncNow(silent){
