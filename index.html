@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Techniques de résolution des problèmes</title>
+<title>Technique de résolution des problèmes</title>
 <style>
 *{box-sizing:border-box}
 :root{--bg:#f4f6f8;--card:#fff;--ink:#1f2937;--mut:#6b7280;--line:#e2e5e9;--acc:#0f766e;--acc2:#0b5c56;--bad:#b91c1c;--warn:#b45309;--blue:#1d4ed8}
@@ -89,7 +89,7 @@ details summary{cursor:pointer;font-weight:600}
 </head>
 <body>
 <header>
-  <h1>Atelier de résolution de problèmes</h1>
+  <h1>Technique de résolution des problèmes</h1>
   <input class="ti" id="ptitle" placeholder="Titre de l'analyse" onchange="S.title=this.value;save()">
   <span class="sp"></span>
   <span id="status"></span>
@@ -128,7 +128,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{}}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{}}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
@@ -252,20 +252,67 @@ const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Manage
 function freeSpot(x,y){let g=0;while(S.tree.nodes.some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
 function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
 function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});return true}
-/* Ajoute à l'arbre les problèmes prioritaires de la phase 2 qui n'y figurent pas encore (sans toucher au reste) */
+/* ---- Liste dynamique : problèmes prioritaires ↔ arbre ---- */
+const isPrio=pid=>stats().some(r=>r.p.id===pid&&r.prio);
+let notice='';
 function autoImportPrio(){
-  const rows=stats().filter(r=>r.prio),wasEmpty=!S.tree.nodes.length;let c=0;
+  const rows=stats().filter(r=>r.prio),wasEmpty=!S.tree.nodes.length;let c=0;const back=[];
   rows.forEach(r=>{
-    if(S.tree.nodes.some(n=>n.pid===r.p.id)||S.noImp[r.p.id])return;
+    if(S.tree.nodes.some(n=>n.pid===r.p.id))return;
+    if(S.parked[r.p.id]){if(restorePark(r.p.id))back.push('P'+(r.i+1));return}
+    if(S.noImp[r.p.id])return;
     const same=S.tree.nodes.find(n=>n.type==='problem'&&!n.pid&&n.text.trim().toLowerCase()===r.p.t.trim().toLowerCase());
     if(same){same.pid=r.p.id;return}
     const mx=S.tree.nodes.reduce((m,n)=>Math.max(m,n.x),-200);
     addNode('problem',r.p.t,wasEmpty?60+c*200:mx+220,300,r.p.id);c++});
-  if(c){if(wasEmpty)autoLayout();save()}
+  if(back.length)notice='Redevenu(s) prioritaire(s), restauré(s) avec leur analyse : '+back.join(', ');
+  if(c||back.length){if(wasEmpty&&!back.length)autoLayout();save()}
   return c}
 function importPrio(){stats().filter(r=>r.prio).forEach(r=>{delete S.noImp[r.p.id]});autoImportPrio();save();render()}
+const pnum=pid=>{const i=S.problems.findIndex(p=>p.id===pid);return i<0?'(supprimé)':'P'+(i+1)}
+const branch=id=>[id,...collect(id,'c').map(x=>x.n.id),...collect(id,'e').map(x=>x.n.id)];
+function parkProblem(pid){
+  const pn=S.tree.nodes.find(n=>n.pid===pid&&n.type==='problem');if(!pn)return;
+  const mine=new Set(branch(pn.id));
+  S.tree.nodes.filter(q=>q.type==='problem'&&q.id!==pn.id).forEach(q=>branch(q.id).forEach(i=>mine.delete(i)));mine.add(pn.id);
+  const ids=[...mine],idx={};ids.forEach((id,k)=>idx[id]=k);
+  const b={ts:Date.now(),by:cfg.get('author')||'',label:pn.text,nodes:ids.map(id=>{const n=nodeOf(id);return{type:n.type,text:n.text,x:n.x,y:n.y,pid:n.pid||''}}),edges:[],ext:[],objs:{},acts:[],whys:S.whys[pn.id]||null,ishi:S.ishi[pn.id]||null,map:{}};
+  S.tree.edges.forEach(e=>{const a=idx[e.from],c=idx[e.to];
+    if(a!==undefined&&c!==undefined)b.edges.push([a,c]);else if(a!==undefined)b.ext.push({k:a,o:e.to,out:1});else if(c!==undefined)b.ext.push({k:c,o:e.from,out:0})});
+  ids.forEach((id,k)=>{if(S.obj[id])b.objs[k]=S.obj[id]});
+  S.actions.forEach(a=>{if(idx[a.obj]!==undefined)b.acts.push([a.id,idx[a.obj]])});
+  Object.keys(S.map).forEach(key=>{if(idx[S.map[key]]!==undefined&&key.indexOf(pn.id)>0){b.map[key.replace(pn.id,'@')]=idx[S.map[key]];delete S.map[key]}});
+  ids.forEach(id=>{tomb(id);delete S.obj[id]});delete S.whys[pn.id];delete S.ishi[pn.id];
+  const set=new Set(ids);S.tree.nodes=S.tree.nodes.filter(n=>!set.has(n.id));S.tree.edges=S.tree.edges.filter(e=>!set.has(e.from)&&!set.has(e.to));
+  S.actions.forEach(a=>{if(set.has(a.obj))a.obj=''});
+  S.parked[pid]=b;save();render()}
+function restorePark(pid){
+  const b=S.parked[pid];if(!b)return false;
+  const ids=b.nodes.map(()=>uid()),live=S.tree.nodes.length,mx=S.tree.nodes.reduce((m,n)=>Math.max(m,n.x),0),mn=Math.min(...b.nodes.map(n=>n.x)),dx=live?mx+220-mn:0;
+  b.nodes.forEach((n,k)=>{const o={id:ids[k],type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:n.y};if(n.pid)o.pid=n.pid;S.tree.nodes.push(o)});
+  b.edges.forEach(e=>S.tree.edges.push({from:ids[e[0]],to:ids[e[1]]}));
+  b.ext.forEach(x=>{if(nodeOf(x.o)){if(x.out)ensureEdge(ids[x.k],x.o);else ensureEdge(x.o,ids[x.k])}});
+  Object.keys(b.objs||{}).forEach(k=>{S.obj[ids[k]]=b.objs[k]});
+  const pk=b.nodes.findIndex(n=>n.type==='problem'&&n.pid===pid),np=ids[pk>=0?pk:0];
+  if(b.whys)S.whys[np]=b.whys;if(b.ishi)S.ishi[np]=b.ishi;
+  Object.keys(b.map||{}).forEach(key=>{S.map[key.replace('@',np)]=ids[b.map[key]]});
+  (b.acts||[]).forEach(a=>{const x=S.actions.find(y=>y.id===a[0]);if(x)x.obj=ids[a[1]]});
+  delete S.parked[pid];tomb('park:'+pid);delete S.noImp[pid];return true}
+function restoreClick(pid){restorePark(pid);save();render()}
+function keepPb(pid){S.keep[pid]=1;save();render()}
+function delPark(pid){if(!confirm('Supprimer définitivement ce problème mis de côté et son analyse ?'))return;delete S.parked[pid];tomb('park:'+pid);save();render()}
+function p3banners(){
+  const nt=notice;notice='';
+  const stale=S.tree.nodes.filter(n=>n.type==='problem'&&n.pid&&!S.keep[n.pid]&&!isPrio(n.pid));
+  const pk=Object.keys(S.parked);
+  let o='';
+  if(nt)o+=`<div class="card" style="border-color:#16a34a;background:#f0fdf4"><b>✓</b> ${esc(nt)}</div>`;
+  if(stale.length)o+=`<div class="card" style="border-color:#f59e0b;background:#fffbeb"><h3 style="margin-top:0">Ne sont plus prioritaires (${stale.length})</h3><p class="sm mut">Ces problèmes figurent dans l'arbre mais ne sont plus parmi les priorités de la phase 2. Mettez-les de côté pour les sauvegarder avec toute leur analyse (causes, effets, 5 Pourquoi / Ishikawa, objectifs) : ils reviendront automatiquement s'ils redeviennent prioritaires.</p>${stale.map(n=>`<div class="or"><b>${pnum(n.pid)}</b> ${esc(n.text)}<div class="bar"><button class="btn sm pri" onclick="parkProblem('${n.pid}')">Mettre de côté (récupérable)</button><button class="btn sm" onclick="keepPb('${n.pid}')">Garder dans l'arbre</button></div></div>`).join('')}</div>`;
+  if(pk.length)o+=`<details class="card"><summary>Problèmes mis de côté (${pk.length})</summary>${pk.map(k=>{const b=S.parked[k];return`<div class="or"><b>${pnum(k)}</b> ${esc(b.label)} <span class="mut sm">· ${b.nodes.length-1} élément(s) d'analyse · ${new Date(b.ts).toLocaleDateString('fr-FR')}${b.by?' · '+esc(b.by):''}</span> ${isPrio(k)?'<span class="pill g">redevenu prioritaire</span>':''}<div class="bar"><button class="btn sm" onclick="restoreClick('${k}')">Restaurer dans l'arbre</button><button class="btn sm bad" onclick="delPark('${k}')">Supprimer</button></div></div>`}).join('')}</details>`;
+  return o}
 function ph3(){
-  autoImportPrio();
+  autoImportPrio();calcHYM();
+  const banners=p3banners();
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
   if(!pbs.find(n=>n.id===selPb))selPb=pbs.length?pbs[0].id:null;
   const pb=nodeOf(selPb);
@@ -279,24 +326,36 @@ function ph3(){
       helper+=`<p class="sm mut">Une cause par ligne dans chaque famille (6M).</p>`+CATS.map(c=>`<label>${c}</label><textarea rows="2" onchange="setIshi('${c.replace(/'/g,"\\'")}',this.value)">${esc(I[c]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendIshi()">Envoyer vers l'arbre</button></div>`+fishSVG(pb.text,I);
     }
   }
-  return`<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
+  return`${banners}<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
    <div class="tabs"><button class="${p3m==='why'?'on':''}" onclick="p3m='why';render()">5 Pourquoi</button><button class="${p3m==='ishi'?'on':''}" onclick="p3m='ishi';render()">Ishikawa (6M)</button></div>${helper}</aside>
   <section class="card"><h2>Arbre à problèmes</h2>
    <p class="sm">Problèmes prioritaires de la phase 2 : ${(()=>{const pr=stats().filter(r=>r.prio);return pr.map(r=>{const ok=S.tree.nodes.some(n=>n.pid===r.p.id);return`<span class="pill ${ok?'g':'o'}" title="${esc(r.p.t)}">P${r.i+1} ${ok?'✓ dans l’arbre':'absent'}</span>`}).join(' ')||'<span class="mut">aucun</span>'})()}</p>
-   <p class="sm mut"><span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas. Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d'un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l'étiquette pour changer le type.</p>
-   <div class="bar"><button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="importPrio()">Importer les problèmes prioritaires</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
+   <p class="sm mut">${orient()==='h'?'<span class="tag cause">Causes</span> à gauche, <span class="tag problem">problème central</span> au milieu, <span class="tag effect">effets</span> à droite.':'<span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas.'} Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d'un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l'étiquette pour changer le type.</p>
+   <div class="bar"><span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span><button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="importPrio()">Importer les problèmes prioritaires</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
    <div id="cv"><div id="stage"><svg id="ed"></svg>${S.tree.nodes.map(nodeHTML).join('')}</div></div></section></div>`;
 }
+/* Lecture de l'arbre : verticale (effets en haut, causes en bas) ou horizontale (causes à gauche, effets à droite).
+   C'est une simple vue propre à chaque utilisateur : les positions enregistrées ne changent pas. */
+const SX=1.8,SY=0.7;let HYM=0;
+const orient=()=>cfg.get('orient')==='h'?'h':'v';
+function calcHYM(){HYM=S.tree.nodes.reduce((m,n)=>Math.max(m,n.y),0)+150}
+function disp(n){return orient()==='h'?[Math.round((HYM-n.y)*SX),Math.round(n.x*SY)+20]:[n.x,n.y]}
+function fromDisp(l,t){return orient()==='h'?[Math.max(0,Math.round((t-20)/SY)),Math.max(0,Math.round(HYM-l/SX))]:[Math.max(0,Math.round(l)),Math.max(0,Math.round(t))]}
+function setOrient(o){cfg.set('orient',o);render()}
 function nodeHTML(n){const lab={problem:'Problème',cause:'Cause',effect:'Effet'}[n.type];
-  return`<div class="tn ${n.type}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div></div>`}
-function fit(){const st=$('#stage');if(!st)return;let mx=900,my=560;S.tree.nodes.forEach(n=>{mx=Math.max(mx,n.x+260);my=Math.max(my,n.y+200)});st.style.width=mx+'px';st.style.height=my+'px'}
+  return`<div class="tn ${n.type}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div></div>`}
+function fit(){const st=$('#stage');if(!st)return;let mx=900,my=560;S.tree.nodes.forEach(n=>{const[l,t]=disp(n);mx=Math.max(mx,l+260);my=Math.max(my,t+200)});st.style.width=mx+'px';st.style.height=my+'px'}
 function drawEdges(){
   const svg=$('#ed'),st=$('#stage');if(!svg)return;
   let h='<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
   S.tree.edges.forEach((e,i)=>{const a=st.querySelector(`.tn[data-id="${e.from}"]`),b=st.querySelector(`.tn[data-id="${e.to}"]`);if(!a||!b)return;
     const x1=a.offsetLeft+a.offsetWidth/2,x2=b.offsetLeft+b.offsetWidth/2;let y1,y2;
     if(a.offsetTop>=b.offsetTop){y1=a.offsetTop;y2=b.offsetTop+b.offsetHeight}else{y1=a.offsetTop+a.offsetHeight;y2=b.offsetTop}
-    const ym=(y1+y2)/2,d=`M${x1} ${y1} C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`;
+    let d;
+    if(orient()==='h'){const ay=a.offsetTop+a.offsetHeight/2,by=b.offsetTop+b.offsetHeight/2;let hx1,hx2;
+      if(a.offsetLeft<=b.offsetLeft){hx1=a.offsetLeft+a.offsetWidth;hx2=b.offsetLeft}else{hx1=a.offsetLeft;hx2=b.offsetLeft+b.offsetWidth}
+      const xm=(hx1+hx2)/2;d=`M${hx1} ${ay} C${xm} ${ay} ${xm} ${by} ${hx2} ${by}`}
+    else{const ym=(y1+y2)/2;d=`M${x1} ${y1} C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`}
     h+=`<path d="${d}" class="ep" marker-end="url(#ah)"/><path d="${d}" class="eh" data-i="${i}"/>`});
   svg.innerHTML=h;
 }
@@ -319,7 +378,7 @@ function initTree(){
 }
 function focusNode(id){const t=$(`.tn[data-id="${id}"] .tx`);if(t){t.focus();const r=document.createRange();r.selectNodeContents(t);const s=getSelection();s.removeAllRanges();s.addRange(r)}}
 function startMove(nd,e){dragging=true;const n=nodeOf(nd.dataset.id),st=$('#stage'),r=nd.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
-  const mv=ev=>{const sr=st.getBoundingClientRect();n.x=Math.max(0,Math.round(ev.clientX-sr.left-dx));n.y=Math.max(0,Math.round(ev.clientY-sr.top-dy));nd.style.left=n.x+'px';nd.style.top=n.y+'px';drawEdges()};
+  const mv=ev=>{const sr=st.getBoundingClientRect();const[nx,ny]=fromDisp(Math.max(0,ev.clientX-sr.left-dx),Math.max(0,ev.clientY-sr.top-dy));n.x=nx;n.y=ny;const[L,T]=disp(n);nd.style.left=L+'px';nd.style.top=T+'px';drawEdges()};
   const up=()=>{dragging=false;removeEventListener('pointermove',mv);removeEventListener('pointerup',up);save();fit()};
   addEventListener('pointermove',mv);addEventListener('pointerup',up)}
 function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.dataset.id;
@@ -332,7 +391,7 @@ function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.d
       if(S.tree.edges.some(x=>x.from===to&&x.to===id)){alert('Ce lien existe déjà dans le sens inverse.');return}
       if(ensureEdge(id,to)){save();drawEdges()}}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
-function addFree(type){const cv=$('#cv');const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',cv.scrollLeft+40,cv.scrollTop+40);save();render();focusNode(n.id)}
+function addFree(type){const cv=$('#cv'),[fx,fy]=fromDisp(cv.scrollLeft+40,cv.scrollTop+40);const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',fx,fy);save();render();focusNode(n.id)}
 function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>{tomb(n.id);if(n.pid)S.noImp[n.pid]=1});S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};S.map={};save();render()}}
 function autoLayout(){
   const N=S.tree.nodes,E=S.tree.edges;if(!N.length)return;
@@ -547,7 +606,7 @@ async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch
 function mergeState(L,R){
   const lw=(L.updated||0)>=(R.updated||0),M=blank();
   M.title=lw?L.title:R.title;M.updated=Math.max(L.updated||0,R.updated||0);
-  M.tomb=Object.assign({},R.tomb,L.tomb);
+  M.tomb=Object.assign({},R.tomb);Object.keys(L.tomb||{}).forEach(k=>{M.tomb[k]=Math.max(M.tomb[k]||0,L.tomb[k])});
   const dead=id=>M.tomb[id]!==undefined;
   const union=(r,l,key,ts)=>{const m=new Map();(r||[]).forEach(x=>m.set(key(x),x));
     (l||[]).forEach(x=>{const k=key(x),c=m.get(k);if(!c)m.set(k,x);else{const a=ts?(x[ts]||0):0,b=ts?(c[ts]||0):0;if(a>b||(a===b&&lw))m.set(k,x)}});return[...m.values()]};
@@ -561,7 +620,9 @@ function mergeState(L,R){
   M.selReset=Math.max(L.selReset||0,R.selReset||0);M.sel={};
   new Set([...Object.keys(R.sel||{}),...Object.keys(L.sel||{})]).forEach(k=>{if(!pid.has(k))return;const a=(L.sel||{})[k],b=(R.sel||{})[k],ts=o=>o&&typeof o==='object'?(o.ts||0):-1,o=ts(a)>=ts(b)?a:b;
     if(o&&typeof o==='object'&&o.ts>M.selReset)M.sel[k]=o});
-  M.ign=dict(R.ign,L.ign);
+  M.ign=dict(R.ign,L.ign);M.keep=dict(R.keep,L.keep);M.parked={};
+  new Set([...Object.keys(R.parked||{}),...Object.keys(L.parked||{})]).forEach(k=>{const a=(L.parked||{})[k],b=(R.parked||{})[k],o=!a?b:!b?a:((a.ts||0)>=(b.ts||0)?a:b);
+    if(o&&pid.has(k)&&(o.ts||0)>(M.tomb['park:'+k]||0))M.parked[k]=o});
   M.tree.nodes=union(R.tree.nodes,L.tree.nodes,n=>n.id).filter(n=>!dead(n.id));
   const nid=new Set(M.tree.nodes.map(n=>n.id));
   M.tree.edges=union(R.tree.edges,L.tree.edges,e=>e.from+'>'+e.to).filter(e=>nid.has(e.from)&&nid.has(e.to)&&!dead('e:'+e.from+'>'+e.to));
@@ -569,7 +630,7 @@ function mergeState(L,R){
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   return M}
-const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
+const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.parked,S.keep,S.noImp,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
 async function syncNow(silent){
