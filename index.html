@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Atelier de résolution de problèmes</title>
+<style>
+*{box-sizing:border-box}
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1f2937;--mut:#6b7280;--line:#e2e5e9;--acc:#0f766e;--acc2:#0b5c56;--bad:#b91c1c;--warn:#b45309;--blue:#1d4ed8}
+body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#12343b;color:#fff;padding:10px 18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+header h1{font-size:16px;margin:0;font-weight:650}
+header input.ti{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;min-width:200px}
+header .sp{flex:1}
+#status{font-size:12px;opacity:.9}
+#status.ok{color:#86efac}#status.bad{color:#fca5a5}
+.hb{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px}
+.hb:hover{background:rgba(255,255,255,.25)}
+nav#steps{display:flex;gap:6px;padding:10px 18px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
+nav#steps button{flex:1;min-width:150px;text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px;color:var(--ink)}
+nav#steps button b{display:block;font-size:11px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+nav#steps button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+nav#steps button.on b{color:#d1fae5}
+main{padding:16px 18px;max-width:1500px;margin:0 auto}
+h2{font-size:16px;margin:0 0 6px}h3{font-size:14px;margin:14px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.mut{color:var(--mut)}.sm{font-size:12px}
+.grid2{display:grid;grid-template-columns:minmax(280px,380px) 1fr;gap:14px;align-items:start}
+@media(max-width:900px){.grid2,.p3{grid-template-columns:1fr!important}}
+textarea,input,select{font:inherit;color:inherit;border:1px solid #cfd4da;border-radius:6px;padding:6px 8px;background:#fff;width:100%}
+textarea{resize:vertical}
+label{display:block;font-weight:600;font-size:12px;margin:9px 0 3px}
+.btn{border:1px solid #cfd4da;background:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit;color:var(--ink)}
+.btn:hover{background:#f1f5f9}.btn.pri{background:var(--acc);color:#fff;border-color:var(--acc)}.btn.pri:hover{background:var(--acc2)}
+.btn.sm{padding:3px 8px;font-size:12px}.btn.bad{color:var(--bad)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.pi{position:relative;border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;margin:6px 0;cursor:pointer}
+.pi.on{border-color:var(--acc);background:#ecfdf5}.pi small{display:block;color:var(--mut)}
+.pi .x{position:absolute;right:6px;top:6px;border:0;background:none;cursor:pointer;color:var(--mut)}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 14px;cursor:pointer}
+.tabs button.on{background:#12343b;color:#fff;border-color:#12343b}
+table{border-collapse:collapse;width:100%}
+th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:top}
+th{background:#f1f5f9;font-size:12px}
+.tw{overflow:auto;max-width:100%}
+td.mc{padding:0;text-align:center;width:38px;min-width:38px}
+td.mc button{width:100%;height:30px;border:0;cursor:pointer;background:#fff;font-weight:700}
+td.mc .w1{background:#fef3c7}td.mc .w2{background:#fdba74}td.mc .w3{background:#f87171;color:#fff}
+td.diag{background:#e5e7eb}
+.chart{width:100%;max-width:820px;height:auto}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:999px;font-weight:600}
+.tag.problem{background:#fee2e2;color:#991b1b}.tag.cause{background:#ffedd5;color:#9a3412}.tag.effect{background:#dbeafe;color:#1e40af}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;background:#e5e7eb}
+.pill.g{background:#d1fae5;color:#065f46}.pill.o{background:#fde68a;color:#78350f}.pill.b{background:#dbeafe;color:#1e3a8a}.pill.r{background:#fee2e2;color:#991b1b}
+/* tree */
+.p3{display:grid;grid-template-columns:340px 1fr;gap:14px;align-items:start}
+#cv{height:640px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fafbfc;background-image:radial-gradient(#d5dae0 1px,transparent 1px);background-size:22px 22px}
+#stage{position:relative}
+#ed{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#ed .ep{fill:none;stroke:#6b7280;stroke-width:1.8}
+#ed .eh{fill:none;stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+#ed .eh:hover{stroke:rgba(220,38,38,.25)}
+.tn{position:absolute;width:176px;background:#fff;border:2px solid #9ca3af;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.tn.problem{border-color:#dc2626}.tn.cause{border-color:#ea580c}.tn.effect{border-color:#2563eb}
+.tn .grip{display:flex;justify-content:space-between;align-items:center;gap:2px;padding:2px 4px;cursor:grab;font-size:11px;border-radius:5px 5px 0 0}
+.tn.problem .grip{background:#fee2e2}.tn.cause .grip{background:#ffedd5}.tn.effect .grip{background:#dbeafe}
+.tn .tl{font-weight:700;cursor:pointer}
+.tn .grip button{border:0;background:rgba(255,255,255,.7);border-radius:4px;font-size:10px;padding:1px 4px;cursor:pointer}
+.tn .grip .lk{cursor:crosshair;font-size:12px}
+.tn .tx{padding:5px 7px;min-height:34px;outline:none;word-wrap:break-word;font-size:13px}
+.tn .tx:focus{background:#fffbeb}
+.or{border-left:3px solid var(--line);padding:4px 0 4px 10px;margin:5px 0}
+.oin{display:flex;gap:6px;margin-top:3px}
+.oin input{flex:1}
+.fish{width:100%;height:auto;border:1px solid var(--line);border-radius:8px;background:#fff}
+.mxc{max-width:640px;width:100%;height:auto;touch-action:none}
+.dot{cursor:grab}
+.pcol{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:1000px){.pcol{grid-template-columns:1fr 1fr}}
+.pcol>div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.pcol .P{background:#eff6ff}.pcol .D{background:#fefce8}.pcol .C{background:#f0fdf4}.pcol .A{background:#fdf2f8}
+.pcol h4{margin:0 0 4px;font-size:13px}
+.prog{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden}.prog i{display:block;height:100%;background:var(--acc)}
+dialog{border:1px solid var(--line);border-radius:12px;padding:18px;max-width:560px;width:92%}
+dialog::backdrop{background:rgba(0,0,0,.35)}
+details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>Atelier de résolution de problèmes</h1>
+  <input class="ti" id="ptitle" placeholder="Titre de l'analyse" onchange="S.title=this.value;save()">
+  <span class="sp"></span>
+  <span id="status"></span>
+  <button class="hb" onclick="cloudSave()">⬆ Envoyer au Sheet</button>
+  <button class="hb" onclick="cloudLoad()">⬇ Charger du Sheet</button>
+  <button class="hb" onclick="openCfg()">⚙ Liaison Sheet</button>
+  <button class="hb" onclick="exportJSON()">Exporter JSON</button>
+  <button class="hb" onclick="$('#jsonIn').click()">Importer JSON</button>
+  <input type="file" id="jsonIn" accept=".json" hidden>
+</header>
+<nav id="steps"></nav>
+<main id="view"></main>
+
+<dialog id="cfg">
+  <h2>Liaison avec Google Sheet</h2>
+  <p class="mut sm">L'outil envoie ses données à un script Google Apps Script (fichier <b>Code.gs</b> fourni) qui les écrit dans votre Sheet : un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
+  <label>URL de l'application web Apps Script (se termine par /exec)</label>
+  <input id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
+  <label>Jeton (facultatif, identique à la constante TOKEN du script)</label>
+  <input id="cfgTok" placeholder="">
+  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Envoi automatique après chaque modification (5 s)</label>
+  <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a></p>
+  <div class="bar"><button class="btn pri" onclick="saveCfg()">Enregistrer</button><button class="btn" onclick="$('#cfg').close()">Fermer</button></div>
+</dialog>
+
+<script>
+const SHEET_URL='https://docs.google.com/spreadsheets/d/1Kr7LsNXrBQMuYUElNAfOQ55OS4P67fg7ofREqVz9Ta8/edit?gid=0#gid=0';
+const $=(s,r=document)=>r.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ---------- État ---------- */
+function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{}}}
+function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
+let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
+let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
+let selP=null,p3m='why',selPb=null,p4='obj',p5='lf';
+const cfg={get:k=>{try{return localStorage.getItem('pbs_'+k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
+let autoT=null;
+function persist(){try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}}
+function save(){S.updated=Date.now();persist();if(cfg.get('auto')==='1'&&cfg.get('url')){clearTimeout(autoT);autoT=setTimeout(cloudSave,5000)}}
+function setStatus(m,k){const s=$('#status');s.textContent=m;s.className=k||''}
+const nodeOf=id=>S.tree.nodes.find(n=>n.id===id);
+const emptyMsg=t=>`<div class="card"><p class="mut">${t}</p></div>`;
+
+/* ---------- Navigation ---------- */
+const PH=[['Phase 1','QQOQCCP · Brainstorming'],['Phase 2','Pareto · Croisement'],['Phase 3','Arbre à problèmes · Causes'],['Phase 4','Objectifs · Impact/Effort'],['Phase 5','Cadre logique · PDCA']];
+const PHF=[ph1,ph2,ph3,ph4,ph5];
+function go(n){P=n;try{localStorage.setItem('pbs_phase',n)}catch(e){}render()}
+function render(){
+  $('#steps').innerHTML=PH.map((p,i)=>`<button class="${P===i+1?'on':''}" onclick="go(${i+1})"><b>${p[0]}</b>${p[1]}</button>`).join('');
+  $('#ptitle').value=S.title||'';
+  $('#view').innerHTML=PHF[P-1]();
+  if(P===3)initTree();
+  if(P===4&&p4==='act')initDots();
+}
+
+/* ---------- Phase 1 : QQOQCCP ---------- */
+const QF=[['q','Quoi ?','Quel est le problème ? Que se passe-t-il exactement ?'],['w','Qui ?','Qui est concerné ou impliqué (acteurs, bénéficiaires, structures) ?'],['o','Où ?','Lieux : régions, districts, CSB, communautés…'],['d','Quand ?','Depuis quand ? À quelle fréquence ? Période ?'],['c','Comment ?','Manifestations, circonstances, déroulement'],['m','Combien ?','Ampleur, chiffres, coûts, proportion touchée'],['y','Pourquoi ?','Causes pressenties, hypothèses (à vérifier en phase 3)']];
+function plistHTML(){return S.problems.map((p,i)=>{const n=QF.filter(f=>p[f[0]]).length;return`<div class="pi ${p.id===selP?'on':''}" onclick="selP='${p.id}';render()"><b>P${i+1}</b> ${esc(p.t)||'<i>(sans titre)</i>'}<small>${n}/7 QQOQCCP · gravité ${p.g}</small><button class="x" title="Supprimer" onclick="event.stopPropagation();delP('${p.id}')">✕</button></div>`}).join('')||'<p class="mut">Aucun problème pour l’instant. Lancez le brainstorming ci-dessus.</p>'}
+function ph1(){
+  const p=S.problems.find(x=>x.id===selP);
+  const ed=p?`<h2>Décrire le problème P${S.problems.indexOf(p)+1}</h2>
+   <label>Intitulé du problème</label><input value="${esc(p.t)}" onchange="setP('${p.id}','t',this.value);$('#plist').innerHTML=plistHTML()">
+   ${QF.map(f=>`<label>${f[1]} <span class="mut" style="font-weight:400">${f[2]}</span></label><textarea rows="2" onchange="setP('${p.id}','${f[0]}',this.value);$('#plist').innerHTML=plistHTML()">${esc(p[f[0]])}</textarea>`).join('')}
+   <label>Gravité perçue (utilisée dans le score de la phase 2)</label>
+   <select onchange="setP('${p.id}','g',+this.value);$('#plist').innerHTML=plistHTML()">${[1,2,3,4,5].map(v=>`<option value="${v}" ${p.g===v?'selected':''}>${v} – ${['Mineure','Modérée','Importante','Grave','Critique'][v-1]}</option>`).join('')}</select>`
+   :`<h2>Fiche QQOQCCP</h2><p class="mut">Sélectionnez un problème dans la liste (ou ajoutez-en) pour le décrire avec les 7 questions.</p>`;
+  return`<div class="grid2"><div class="card"><h2>Brainstorming</h2><p class="mut sm">Listez tous les problèmes rencontrés sur le terrain, un par ligne. Pas de jugement à ce stade.</p>
+  <textarea id="bs" rows="5" placeholder="Ex. : Retard de paiement des agents communautaires"></textarea>
+  <div class="bar"><button class="btn pri" onclick="addBS()">Ajouter à la liste</button></div>
+  <h3>Problèmes identifiés (${S.problems.length})</h3><div id="plist">${plistHTML()}</div></div><div class="card">${ed}</div></div>`;
+}
+function addBS(){const t=$('#bs').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!t.length)return;
+  t.forEach(x=>S.problems.push({id:uid(),t:x,g:3,q:'',w:'',o:'',d:'',c:'',m:'',y:''}));selP=S.problems[S.problems.length-1].id;save();render()}
+function setP(id,k,v){const p=S.problems.find(x=>x.id===id);if(p){p[k]=v;save()}}
+function delP(id){if(!confirm('Supprimer ce problème et ses croisements ?'))return;
+  S.problems=S.problems.filter(p=>p.id!==id);Object.keys(S.matrix).forEach(k=>{if(k.split('|').includes(id))delete S.matrix[k]});delete S.sel[id];if(selP===id)selP=null;save();render()}
+
+/* ---------- Phase 2 : Pareto par croisement ---------- */
+function stats(){
+  const Pr=S.problems,act={},pas={};Pr.forEach(p=>{act[p.id]=0;pas[p.id]=0});
+  for(const k in S.matrix){const[a,b]=k.split('|'),w=+S.matrix[k]||0;if(act[a]!==undefined&&pas[b]!==undefined){act[a]+=w;pas[b]+=w}}
+  const rows=Pr.map((p,i)=>({p,i,act:act[p.id],pas:pas[p.id],g:+p.g||3,score:(act[p.id]+pas[p.id])*(+p.g||3)}));
+  const total=rows.reduce((s,r)=>s+r.score,0)||1,n=rows.length||1;
+  const ma=rows.reduce((s,r)=>s+r.act,0)/n,mp=rows.reduce((s,r)=>s+r.pas,0)/n;
+  rows.forEach(r=>{r.role=!r.score?'—':r.act>=ma&&r.pas<mp?'Moteur (cause racine)':r.act>=ma?'Relais (central)':r.pas>=mp?'Résultat (conséquence)':'Autonome'});
+  rows.sort((a,b)=>b.score-a.score||a.i-b.i);
+  let cum=0;rows.forEach(r=>{const before=cum;r.pct=r.score/total*100;cum+=r.pct;r.cum=Math.min(cum,100);r.auto=before<80&&r.score>0;r.prio=S.sel[r.p.id]!==undefined?S.sel[r.p.id]:r.auto});
+  return rows;
+}
+function paretoSVG(rows){
+  const W=780,H=310,L=48,R=48,T=16,B=44,w=W-L-R,h=H-T-B,max=Math.max(...rows.map(r=>r.score),1),bw=w/rows.length;
+  let s=`<svg viewBox="0 0 ${W} ${H}" class="chart" font-family="system-ui">`;
+  [0,.25,.5,.75,1].forEach(f=>{const y=T+h*(1-f);s+=`<line x1="${L}" x2="${W-R}" y1="${y}" y2="${y}" stroke="#e5e7eb"/><text x="${W-R+6}" y="${y+4}" font-size="11" fill="#6b7280">${f*100}%</text><text x="${L-6}" y="${y+4}" font-size="11" text-anchor="end" fill="#6b7280">${Math.round(max*f)}</text>`});
+  rows.forEach((r,i)=>{const bh=h*r.score/max,x=L+i*bw+bw*.15;s+=`<rect x="${x}" y="${T+h-bh}" width="${bw*.7}" height="${bh}" rx="3" fill="${r.prio?'#0f766e':'#9ca3af'}"><title>P${r.i+1} – ${esc(r.p.t)} : ${r.score}</title></rect><text x="${L+i*bw+bw/2}" y="${H-B+16}" font-size="11" text-anchor="middle" fill="#374151">P${r.i+1}</text>`});
+  const pts=rows.map((r,i)=>`${L+i*bw+bw/2},${T+h*(1-r.cum/100)}`).join(' ');
+  s+=`<line x1="${L}" x2="${W-R}" y1="${T+h*.2}" y2="${T+h*.2}" stroke="#dc2626" stroke-dasharray="5 4"/><text x="${L+4}" y="${T+h*.2-4}" font-size="11" fill="#dc2626">seuil 80 %</text>`;
+  s+=`<polyline points="${pts}" fill="none" stroke="#1d4ed8" stroke-width="2"/>`+rows.map((r,i)=>`<circle cx="${L+i*bw+bw/2}" cy="${T+h*(1-r.cum/100)}" r="3.5" fill="#1d4ed8"/>`).join('');
+  return s+'</svg>';
+}
+function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;if(v)S.matrix[k]=v;else delete S.matrix[k];save();render()}
+function setSel(id,v){S.sel[id]=v;save();render()}
+function ph2(){
+  const Pr=S.problems;if(Pr.length<2)return emptyMsg('Ajoutez au moins deux problèmes en phase 1 pour pouvoir les croiser.');
+  const head=Pr.map((p,i)=>`<th title="${esc(p.t)}" style="text-align:center">P${i+1}</th>`).join('');
+  const body=Pr.map((a,i)=>`<tr><th title="${esc(a.t)}" style="white-space:nowrap">P${i+1} <span style="font-weight:400">${esc(a.t.length>34?a.t.slice(0,33)+'…':a.t)}</span></th>${Pr.map((b,j)=>i===j?'<td class="diag"></td>':`<td class="mc"><button class="w${+S.matrix[a.id+'|'+b.id]||0}" onclick="cyc('${a.id}','${b.id}')">${S.matrix[a.id+'|'+b.id]||''}</button></td>`).join('')}</tr>`).join('');
+  const rows=stats(),np=rows.filter(r=>r.prio).length;
+  return`<div class="card"><h2>1. Croiser les problèmes entre eux</h2>
+  <p class="mut">Lecture <b>en ligne</b> : « si le problème de la ligne s'aggrave, entraîne-t-il celui de la colonne ? » Cliquez sur une case pour faire varier le lien : <span class="pill">0 aucun</span> <span class="pill o">1 faible</span> <span class="pill o" style="background:#fdba74">2 moyen</span> <span class="pill r">3 fort</span></p>
+  <div class="tw"><table><tr><th></th>${head}</tr>${body}</table></div></div>
+  <div class="card"><h2>2. Score et diagramme de Pareto</h2>
+  <details><summary>Comment le score est calculé</summary><p class="sm"><b>Influence exercée</b> = somme de la ligne (le problème provoque les autres). <b>Influence reçue</b> = somme de la colonne (il est provoqué par les autres). <b>Score = (exercée + reçue) × gravité</b> : un problème très connecté et grave pèse plus. Rôle : <i>Moteur</i> = exerce beaucoup et subit peu (cause racine) ; <i>Relais</i> = fortement lié dans les deux sens ; <i>Résultat</i> = surtout une conséquence ; <i>Autonome</i> = peu lié. Seuil automatique : problèmes qui cumulent les 80 % du score. Vous pouvez corriger la sélection à la main.</p></details>
+  ${paretoSVG(rows)}
+  <div class="bar"><b>${np} problème(s) prioritaire(s)</b><button class="btn sm" onclick="S.sel={};save();render()">Revenir au seuil automatique 80 %</button></div>
+  <div class="tw"><table><tr><th>Rang</th><th>Problème</th><th>Exercée</th><th>Reçue</th><th>Gravité</th><th>Score</th><th>%</th><th>% cumulé</th><th>Rôle</th><th>Prioritaire</th></tr>
+  ${rows.map((r,k)=>`<tr style="${r.prio?'background:#ecfdf5':''}"><td>${k+1}</td><td><b>P${r.i+1}</b> ${esc(r.p.t)}</td><td>${r.act}</td><td>${r.pas}</td><td>${r.g}</td><td><b>${r.score}</b></td><td>${r.pct.toFixed(1)}</td><td>${r.cum.toFixed(1)}</td><td>${r.role}</td><td><input type="checkbox" style="width:auto" ${r.prio?'checked':''} onchange="setSel('${r.p.id}',this.checked)"></td></tr>`).join('')}</table></div>
+  <div class="bar"><button class="btn pri" onclick="go(3)">Passer à l'arbre à problèmes →</button></div></div>`;
+}
+
+/* ---------- Phase 3 : Arbre à problèmes ---------- */
+const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Management"];
+function freeSpot(x,y){let g=0;while(S.tree.nodes.some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
+function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
+function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;S.tree.edges.push({from,to});return true}
+function importPrio(){
+  const rows=stats().filter(r=>r.prio);let c=0;
+  rows.forEach(r=>{if(S.tree.nodes.some(n=>n.pid===r.p.id))return;addNode('problem',r.p.t,60+c*200,300,r.p.id);c++});
+  save();if(c)autoLayout();render()
+}
+function ph3(){
+  if(!S.tree.nodes.length&&stats().some(r=>r.prio)){stats().filter(r=>r.prio).forEach((r,c)=>{S.tree.nodes.push({id:uid(),type:'problem',text:r.p.t,x:60+c*200,y:300,pid:r.p.id})});autoLayout();persist()}
+  const pbs=S.tree.nodes.filter(n=>n.type==='problem');
+  if(!pbs.find(n=>n.id===selPb))selPb=pbs.length?pbs[0].id:null;
+  const pb=nodeOf(selPb);
+  let helper='';
+  if(!pb)helper='<p class="mut">Ajoutez un nœud « Problème » dans l\'arbre (ou importez les problèmes prioritaires) pour analyser ses causes.</p>';
+  else{
+    helper=`<label>Problème analysé</label><select onchange="selPb=this.value;render()">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,60))}</option>`).join('')}</select>`;
+    if(p3m==='why'){const w=S.whys[selPb]||[];
+      helper+=`<p class="sm mut">Remontez la chaîne causale : chaque réponse devient la cause de la précédente.</p>`+[0,1,2,3,4].map(i=>`<label>Pourquoi ? (${i+1}) ${i===0?'':'<span class="mut" style="font-weight:400">– pourquoi la réponse précédente ?</span>'}</label><textarea rows="2" onchange="setWhy(${i},this.value)">${esc(w[i]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendWhys()">Envoyer vers l'arbre</button></div>`;
+    }else{const I=S.ishi[selPb]||{};
+      helper+=`<p class="sm mut">Une cause par ligne dans chaque famille (6M).</p>`+CATS.map(c=>`<label>${c}</label><textarea rows="2" onchange="setIshi('${c.replace(/'/g,"\\'")}',this.value)">${esc(I[c]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendIshi()">Envoyer vers l'arbre</button></div>`+fishSVG(pb.text,I);
+    }
+  }
+  return`<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
+   <div class="tabs"><button class="${p3m==='why'?'on':''}" onclick="p3m='why';render()">5 Pourquoi</button><button class="${p3m==='ishi'?'on':''}" onclick="p3m='ishi';render()">Ishikawa (6M)</button></div>${helper}</aside>
+  <section class="card"><h2>Arbre à problèmes</h2>
+   <p class="sm mut"><span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas. Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d'un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l'étiquette pour changer le type.</p>
+   <div class="bar"><button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="importPrio()">Importer les problèmes prioritaires</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
+   <div id="cv"><div id="stage"><svg id="ed"></svg>${S.tree.nodes.map(nodeHTML).join('')}</div></div></section></div>`;
+}
+function nodeHTML(n){const lab={problem:'Problème',cause:'Cause',effect:'Effet'}[n.type];
+  return`<div class="tn ${n.type}" data-id="${n.id}" style="left:${n.x}px;top:${n.y}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div></div>`}
+function fit(){const st=$('#stage');if(!st)return;let mx=900,my=560;S.tree.nodes.forEach(n=>{mx=Math.max(mx,n.x+260);my=Math.max(my,n.y+200)});st.style.width=mx+'px';st.style.height=my+'px'}
+function drawEdges(){
+  const svg=$('#ed'),st=$('#stage');if(!svg)return;
+  let h='<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
+  S.tree.edges.forEach((e,i)=>{const a=st.querySelector(`.tn[data-id="${e.from}"]`),b=st.querySelector(`.tn[data-id="${e.to}"]`);if(!a||!b)return;
+    const x1=a.offsetLeft+a.offsetWidth/2,x2=b.offsetLeft+b.offsetWidth/2;let y1,y2;
+    if(a.offsetTop>=b.offsetTop){y1=a.offsetTop;y2=b.offsetTop+b.offsetHeight}else{y1=a.offsetTop+a.offsetHeight;y2=b.offsetTop}
+    const ym=(y1+y2)/2,d=`M${x1} ${y1} C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`;
+    h+=`<path d="${d}" class="ep" marker-end="url(#ah)"/><path d="${d}" class="eh" data-i="${i}"/>`});
+  svg.innerHTML=h;
+}
+function initTree(){
+  const st=$('#stage');fit();drawEdges();
+  st.onpointerdown=e=>{const nd=e.target.closest('.tn');if(!nd)return;
+    if(e.target.closest('.lk')){e.preventDefault();startLink(nd,e)}
+    else if(e.target.closest('.grip')&&!e.target.closest('button')&&!e.target.closest('.tl')){e.preventDefault();startMove(nd,e)}};
+  st.onclick=e=>{
+    const eh=e.target.closest('.eh');if(eh){if(confirm('Supprimer ce lien de causalité ?')){S.tree.edges.splice(+eh.dataset.i,1);save();drawEdges()}return}
+    const nd=e.target.closest('.tn'),t=e.target.closest('[data-act]');if(!nd||!t)return;const n=nodeOf(nd.dataset.id),a=t.dataset.act;
+    if(a==='type'){n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
+    else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);save();render();focusNode(c.id)}
+    else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);save();render();focusNode(c.id)}
+    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);save();render()}}
+  };
+  st.oninput=e=>{const t=e.target.closest('[data-act="txt"]');if(!t)return;const n=nodeOf(t.closest('.tn').dataset.id);n.text=t.innerText.replace(/\s+/g,' ').trim();drawEdges()};
+  st.onfocusout=e=>{if(e.target.closest&&e.target.closest('[data-act="txt"]'))save()};
+  st.onkeydown=e=>{if(e.key==='Enter'&&e.target.closest('[data-act="txt"]')){e.preventDefault();e.target.blur()}};
+}
+function focusNode(id){const t=$(`.tn[data-id="${id}"] .tx`);if(t){t.focus();const r=document.createRange();r.selectNodeContents(t);const s=getSelection();s.removeAllRanges();s.addRange(r)}}
+function startMove(nd,e){const n=nodeOf(nd.dataset.id),st=$('#stage'),r=nd.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
+  const mv=ev=>{const sr=st.getBoundingClientRect();n.x=Math.max(0,Math.round(ev.clientX-sr.left-dx));n.y=Math.max(0,Math.round(ev.clientY-sr.top-dy));nd.style.left=n.x+'px';nd.style.top=n.y+'px';drawEdges()};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);save();fit()};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up)}
+function startLink(nd,e){const st=$('#stage'),svg=$('#ed'),id=nd.dataset.id;
+  const ns='http://www.w3.org/2000/svg',rb=document.createElementNS(ns,'path');rb.setAttribute('stroke','#0f766e');rb.setAttribute('stroke-width','2');rb.setAttribute('stroke-dasharray','5 4');rb.setAttribute('fill','none');svg.appendChild(rb);
+  const sx=nd.offsetLeft+nd.offsetWidth/2,sy=nd.offsetTop+nd.offsetHeight/2;
+  const mv=ev=>{const sr=st.getBoundingClientRect();rb.setAttribute('d',`M${sx} ${sy} L${ev.clientX-sr.left} ${ev.clientY-sr.top}`)};
+  const up=ev=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);rb.remove();
+    const t=document.elementFromPoint(ev.clientX,ev.clientY),tn=t&&t.closest('.tn');
+    if(tn&&tn.dataset.id!==id){const to=tn.dataset.id;
+      if(S.tree.edges.some(x=>x.from===to&&x.to===id)){alert('Ce lien existe déjà dans le sens inverse.');return}
+      if(ensureEdge(id,to)){save();drawEdges()}}};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
+function addFree(type){const cv=$('#cv');const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',cv.scrollLeft+40,cv.scrollTop+40);save();render();focusNode(n.id)}
+function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree={nodes:[],edges:[]};S.map={};save();render()}}
+function autoLayout(){
+  const N=S.tree.nodes,E=S.tree.edges;if(!N.length)return;
+  const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{if(adj[e.from]&&adj[e.to]){adj[e.from].push(e.to);adj[e.to].push(e.from)}});
+  const seen=new Set(),comps=[];
+  N.forEach(n=>{if(seen.has(n.id))return;const c=[],q=[n.id];seen.add(n.id);while(q.length){const i=q.shift();c.push(i);adj[i].forEach(j=>{if(!seen.has(j)){seen.add(j);q.push(j)}})}comps.push(c)});
+  let off=40;
+  comps.forEach(c=>{
+    const lvl={},roots=c.filter(i=>nodeOf(i).type==='problem'),q=(roots.length?roots:[c[0]]).slice();q.forEach(i=>lvl[i]=0);
+    while(q.length){const i=q.shift();E.forEach(e=>{
+      if(e.to===i&&lvl[e.from]===undefined&&nodeOf(e.from).type!=='effect'){lvl[e.from]=lvl[i]+1;q.push(e.from)}
+      if(e.from===i&&lvl[e.to]===undefined&&nodeOf(e.to).type!=='cause'){lvl[e.to]=lvl[i]-1;q.push(e.to)}})}
+    c.forEach(i=>{if(lvl[i]===undefined){const t=nodeOf(i).type;lvl[i]=t==='cause'?1:t==='effect'?-1:0}});
+    const by={};c.forEach(i=>(by[lvl[i]]=by[lvl[i]]||[]).push(i));
+    const lv=Object.keys(by).map(Number),mn=Math.min(...lv),wmax=Math.max(...lv.map(l=>by[l].length))*200;
+    lv.forEach(l=>{const g=by[l].sort((a,b)=>nodeOf(a).x-nodeOf(b).x),st=off+(wmax-g.length*200)/2;g.forEach((id,k)=>{const n=nodeOf(id);n.x=Math.round(st+k*200);n.y=40+(l-mn)*130})});
+    off+=wmax+80});
+  save();
+}
+function setWhy(i,v){const a=S.whys[selPb]=S.whys[selPb]||['','','','',''];a[i]=v;save()}
+function sendWhys(){const pb=nodeOf(selPb),arr=S.whys[selPb]||[];let prev=pb,c=0;
+  arr.forEach((t,i)=>{t=(t||'').trim();if(!t)return;const key=`w:${selPb}:${i}`;let n=nodeOf(S.map[key]);
+    if(n)n.text=t;else{n=addNode('cause',t,prev.x,prev.y+130);S.map[key]=n.id}ensureEdge(n.id,prev.id);prev=n;c++});
+  if(c){save();autoLayout();render()}else alert('Renseignez au moins un « Pourquoi ».')}
+function setIshi(c,v){const o=S.ishi[selPb]=S.ishi[selPb]||{};o[c]=v;save()}
+function sendIshi(){const pb=nodeOf(selPb),I=S.ishi[selPb]||{};let c=0;
+  CATS.forEach(cat=>(I[cat]||'').split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>{const key=`i:${selPb}:${cat}:${t}`;if(nodeOf(S.map[key]))return;const n=addNode('cause',t,pb.x,pb.y+130);S.map[key]=n.id;ensureEdge(n.id,pb.id);c++}));
+  if(c){save();autoLayout();render()}else alert('Aucune nouvelle cause à envoyer.')}
+function fishSVG(title,I){
+  const W=720,H=330;let s=`<svg viewBox="0 0 ${W} ${H}" class="fish" font-family="system-ui" font-size="10"><line x1="20" y1="165" x2="590" y2="165" stroke="#374151" stroke-width="3"/><rect x="590" y="140" width="125" height="50" rx="8" fill="#fee2e2" stroke="#dc2626"/>`;
+  const words=(title||'').split(' ');let ln=[''];words.forEach(w=>{if((ln[ln.length-1]+' '+w).length>20)ln.push(w);else ln[ln.length-1]+=' '+w});
+  ln.slice(0,3).forEach((t,i)=>s+=`<text x="652" y="${160+i*12}" text-anchor="middle" fill="#7f1d1d">${esc(t.trim().slice(0,22))}</text>`);
+  CATS.forEach((c,k)=>{const top=k<3,x=120+(k%3)*170,y0=top?30:300;
+    s+=`<line x1="${x}" y1="${y0}" x2="${x+60}" y2="165" stroke="#6b7280" stroke-width="2"/><text x="${x-4}" y="${top?20:318}" font-weight="700" font-size="11" fill="#0f766e">${esc(c)}</text>`;
+    (I[c]||'').split('\n').map(t=>t.trim()).filter(Boolean).slice(0,6).forEach((t,i)=>{const yy=top?48+i*16:282-i*16,xx=x+(yy-y0)*(60/(165-y0));s+=`<text x="${xx+6}" y="${yy}" fill="#374151">${esc(t.slice(0,26))}</text>`})});
+  return s+'</svg>'}
+
+/* --- Export / import FreeMind (.mm) --- */
+function download(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:type||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function exportMM(){
+  const N=S.tree.nodes,E=S.tree.edges;if(!N.length){alert("L'arbre est vide.");return}
+  const used=new Set(),real=new Set();
+  const causesOf=id=>E.filter(e=>e.to===id).map(e=>nodeOf(e.from)).filter(Boolean);
+  const effectsOf=id=>E.filter(e=>e.from===id).map(e=>nodeOf(e.to)).filter(Boolean);
+  function build(n,mode){used.add(n.id);const o={n,kids:[]};
+    if(mode==='problem'){effectsOf(n.id).forEach(c=>{if(!used.has(c.id)){real.add(n.id+'>'+c.id);const k=build(c,'effect');k.pos='left';o.kids.push(k)}});
+      causesOf(n.id).forEach(c=>{if(!used.has(c.id)){real.add(c.id+'>'+n.id);const k=build(c,'cause');k.pos='right';o.kids.push(k)}})}
+    else if(mode==='effect')effectsOf(n.id).forEach(c=>{if(!used.has(c.id)){real.add(n.id+'>'+c.id);o.kids.push(build(c,'effect'))}});
+    else causesOf(n.id).forEach(c=>{if(!used.has(c.id)){real.add(c.id+'>'+n.id);o.kids.push(build(c,'cause'))}});
+    return o}
+  const probs=N.filter(n=>n.type==='problem');let roots=probs.map(p=>build(p,'problem'));
+  const orph=N.filter(n=>!used.has(n.id));
+  orph.forEach(n=>{if(!used.has(n.id))roots.push(build(n,n.type==='effect'?'effect':n.type==='cause'?'cause':'problem'))});
+  let top;
+  if(roots.length===1&&!orph.length)top=roots[0];
+  else{top={n:{id:'ROOT',type:'root',text:S.title||'Arbre à problèmes'},kids:roots};}
+  const extra={};E.forEach(e=>{if(!real.has(e.from+'>'+e.to))(extra[e.from]=extra[e.from]||[]).push(e.to)});
+  const cols={problem:'#fecaca',cause:'#fed7aa',effect:'#bfdbfe',root:'#e5e7eb'};
+  function ser(o,depth,rootLevel){const n=o.n;
+    let s=`<node ID="ID_${n.id}" TEXT="${esc(n.text).replace(/\n/g,' ')}" BACKGROUND_COLOR="${cols[n.type]}"${o.pos&&depth===1&&top===roots[0]&&roots.length===1?` POSITION="${o.pos}"`:''}>`;
+    s+=`<attribute NAME="type" VALUE="${n.type}"/>`;if(n.pid)s+=`<attribute NAME="pid" VALUE="${n.pid}"/>`;
+    (extra[n.id]||[]).forEach(t=>s+=`<arrowlink DESTINATION="ID_${t}"/>`);
+    o.kids.forEach(k=>s+=ser(k,depth+1));return s+'</node>'}
+  const xml=`<map version="1.0.1">\n${ser(top,0)}\n</map>`;
+  download((S.title||'arbre').replace(/[^\w\-]+/g,'_')+'.mm',xml,'application/xml');
+}
+function importMMFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{importMM(r.result)}catch(e){alert('Import impossible : '+e.message)}inp.value=''};r.readAsText(f)}
+function importMM(xml){
+  const doc=new DOMParser().parseFromString(xml,'text/xml');if(doc.querySelector('parsererror'))throw new Error('fichier .mm invalide');
+  const root=doc.querySelector('map > node');if(!root)throw new Error('aucun nœud racine');
+  if(S.tree.nodes.length&&!confirm("L'import remplace l'arbre actuel. Continuer ?"))return;
+  const nodes=[],edges=[],idMap={},arrows=[],ids=new Set();
+  const attr=(el,k)=>{const a=[...el.children].find(c=>c.tagName==='attribute'&&c.getAttribute('NAME')===k);return a?a.getAttribute('VALUE'):null};
+  const fix=v=>{let id=(v||'').replace(/^ID_/,'').replace(/[^\w\-]/g,'')||uid();while(ids.has(id))id=uid();ids.add(id);return id};
+  function walk(el,parent){
+    const rt=attr(el,'type'),synthetic=rt==='root';let me=null;
+    if(!synthetic){let t=rt;
+      if(!t){if(!parent)t='problem';else if(parent.type==='root')t='problem';else if(parent.type==='problem')t=el.getAttribute('POSITION')==='left'?'effect':'cause';else t=parent.type}
+      me={id:fix(el.getAttribute('ID')),type:t,text:(el.getAttribute('TEXT')||'').trim()||'(sans texte)',x:0,y:0};
+      const pid=attr(el,'pid');if(pid&&S.problems.some(p=>p.id===pid))me.pid=pid;
+      nodes.push(me);idMap[el.getAttribute('ID')]=me.id;
+      if(parent&&parent.type!=='root'){if(me.type==='effect')edges.push({from:parent.id,to:me.id});else edges.push({from:me.id,to:parent.id})}
+      [...el.children].filter(c=>c.tagName==='arrowlink').forEach(a=>arrows.push([me.id,a.getAttribute('DESTINATION')]))}
+    const ctx=synthetic?{type:'root'}:me;
+    [...el.children].filter(c=>c.tagName==='node').forEach(c=>walk(c,ctx))}
+  walk(root,null);
+  arrows.forEach(([f,d])=>{const t=idMap[d];if(t&&t!==f&&!edges.some(e=>e.from===f&&e.to===t))edges.push({from:f,to:t})});
+  S.tree={nodes,edges};S.map={};autoLayout();save();render();
+}
+function exportJSON(){download((S.title||'analyse').replace(/[^\w\-]+/g,'_')+'.json',JSON.stringify(S,null,1),'application/json')}
+$('#jsonIn').onchange=function(){const f=this.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{S=normalize(JSON.parse(r.result));persist();render()}catch(e){alert('Fichier JSON invalide')}this.value=''};r.readAsText(f)};
+
+/* ---------- Phase 4 : Objectifs, actions, impact/effort ---------- */
+const INV=[
+ [/^(manque|insuffisance|carence|déficit|pénurie|faiblesse)\s+(de la |de l'|du |des |de |d')?(.+)$/i,m=>`Disposer ${(m[2]||'de ')}${m[3]} en quantité et qualité suffisantes`],
+ [/^(absence|inexistence)\s+(de la |de l'|du |des |de |d')?(.+)$/i,m=>`Mettre en place : ${m[3]}`],
+ [/^retards?\s+(de la |de l'|du |des |de |d'|dans le |dans la |dans les |dans l')?(.+)$/i,m=>`Respecter les délais : ${m[2]}`],
+ [/^ruptures?\s+(de la |de l'|du |des |de |d')?(.+)$/i,m=>`Assurer la disponibilité continue de ${m[2]}`],
+ [/^(mauvaise?s?|faible|insuffisant\w*)\s+(.+)$/i,m=>`Améliorer : ${m[2]}`]];
+function invertText(t){t=(t||'').trim();for(const[r,f]of INV){const m=t.match(r);if(m)return f(m)}return'Réduire / corriger : '+t.charAt(0).toLowerCase()+t.slice(1)}
+function setObj(id,v){S.obj[id]={t:v};save()}
+function autoObj(id){const n=nodeOf(id);S.obj[id]={t:invertText(n.text)};save();render()}
+function autoAll(){S.tree.nodes.forEach(n=>{if(!(S.obj[n.id]&&S.obj[n.id].t))S.obj[n.id]={t:invertText(n.text)}});save();render()}
+function collect(id,dir){const out=[],seen=new Set([id]);const E=S.tree.edges;
+  (function go(i,d){E.forEach(e=>{const nx=dir==='c'?(e.to===i?e.from:null):(e.from===i?e.to:null);if(nx&&!seen.has(nx)&&nodeOf(nx)){seen.add(nx);out.push({n:nodeOf(nx),d});go(nx,d+1)}})})(id,1);return out}
+function orow(n,d,label){const o=(S.obj[n.id]||{}).t||'';return`<div class="or" style="margin-left:${d*22}px"><div><span class="tag ${n.type}">${label}</span> <span class="mut sm">Problème : ${esc(n.text)}</span></div><div class="oin"><input value="${esc(o)}" placeholder="Objectif / état souhaité" onchange="setObj('${n.id}',this.value)"><button class="btn sm" onclick="autoObj('${n.id}')">Auto</button><button class="btn sm" onclick="addAct('${n.id}')">＋ action</button></div></div>`}
+function objView(){
+  const N=S.tree.nodes;if(!N.length)return emptyMsg("Construisez d'abord l'arbre à problèmes (phase 3).");
+  const shown=new Set();let h='';
+  N.filter(n=>n.type==='problem').forEach(p=>{
+    const ef=collect(p.id,'e'),ca=collect(p.id,'c');shown.add(p.id);ef.concat(ca).forEach(x=>shown.add(x.n.id));
+    h+=`<div class="card"><h3 style="margin-top:0">Arbre à objectifs</h3>`+
+      (ef.length?'<p class="sm mut" style="margin:4px 0">Fins (effets inversés)</p>'+ef.slice().reverse().map(x=>orow(x.n,0,'Fin')).join(''):'')+
+      '<p class="sm mut" style="margin:8px 0 4px">Objectif central</p>'+orow(p,0,'Objectif')+
+      (ca.length?'<p class="sm mut" style="margin:8px 0 4px">Moyens (causes inversées)</p>'+ca.map(x=>orow(x.n,x.d-1,'Moyen')).join(''):'')+'</div>'});
+  const rest=N.filter(n=>!shown.has(n.id));
+  if(rest.length)h+=`<div class="card"><h3 style="margin-top:0">Autres éléments non reliés</h3>${rest.map(n=>orow(n,0,n.type==='effect'?'Fin':'Moyen')).join('')}</div>`;
+  return`<div class="bar"><button class="btn pri" onclick="autoAll()">Transformer automatiquement les problèmes vides en objectifs</button><span class="mut sm">Le texte proposé est une base à reformuler (état positif souhaité).</span></div>`+h}
+function addAct(nodeId){S.actions.push({id:uid(),t:'',obj:nodeId||'',resp:'',imp:2,eff:2,keep:false});p4='act';save();render()}
+function setA(id,k,v){const a=S.actions.find(x=>x.id===id);if(a){a[k]=v;save()}}
+function delA(id){if(!confirm('Supprimer cette action ?'))return;S.actions=S.actions.filter(a=>a.id!==id);delete S.pdca[id];save();render()}
+function quad(a){const hi=a.imp>=3,lo=a.eff<=2;return hi&&lo?'Gain rapide':hi?'Projet majeur':lo?'Remplissage':'À écarter / reporter'}
+function nodeLabel(id){const n=nodeOf(id);if(!n)return'—';return((S.obj[id]&&S.obj[id].t)||n.text).slice(0,70)}
+function keepQuick(){S.actions.forEach(a=>a.keep=(a.imp>=3));save();render()}
+function mxInner(){
+  const L=60,T=16,cw=130,ch=95,W=L+cw*4+10,H=T+ch*4+50;let s='';
+  const col={'11':'#dcfce7','10':'#dbeafe','01':'#f3f4f6','00':'#fee2e2'};
+  for(let r=0;r<4;r++)for(let c=0;c<4;c++){const imp=4-r,eff=c+1,hi=imp>=3,lo=eff<=2;s+=`<rect x="${L+c*cw}" y="${T+r*ch}" width="${cw}" height="${ch}" fill="${col[(hi?'1':'0')+(lo?'1':'0')]}" stroke="#fff"/>`}
+  s+=`<text x="${L+cw}" y="${T+16}" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">Gains rapides</text><text x="${L+cw*3}" y="${T+16}" text-anchor="middle" font-size="12" font-weight="700" fill="#1e40af">Projets majeurs</text><text x="${L+cw}" y="${T+ch*4-8}" text-anchor="middle" font-size="12" font-weight="700" fill="#4b5563">Remplissage</text><text x="${L+cw*3}" y="${T+ch*4-8}" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">À écarter / reporter</text>`;
+  s+=`<text x="${L+cw*2}" y="${H-12}" text-anchor="middle" font-size="12" fill="#374151">EFFORT  (1 faible → 4 très important)</text><text transform="translate(16 ${T+ch*2}) rotate(-90)" text-anchor="middle" font-size="12" fill="#374151">IMPACT  (1 → 4)</text>`;
+  const grp={};S.actions.forEach((a,i)=>{const k=a.imp+'|'+a.eff;(grp[k]=grp[k]||[]).push(i)});
+  S.actions.forEach((a,i)=>{const g=grp[a.imp+'|'+a.eff],k=g.indexOf(i),cx=L+(a.eff-.5)*cw+((k%4)-(Math.min(g.length,4)-1)/2)*30,cy=T+(4-a.imp+.5)*ch+Math.floor(k/4)*30-(Math.ceil(g.length/4)-1)*15;
+    s+=`<g class="dot" data-id="${a.id}"><circle cx="${cx}" cy="${cy}" r="14" fill="${a.keep?'#0f766e':'#64748b'}" stroke="#fff" stroke-width="2"/><text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" pointer-events="none">A${i+1}</text><title>${esc(a.t)}</title></g>`});
+  return s}
+function initDots(){const svg=$('#mx');if(!svg)return;
+  svg.onpointerdown=e=>{const g=e.target.closest('.dot');if(!g)return;e.preventDefault();const a=S.actions.find(x=>x.id===g.dataset.id);
+    const mv=ev=>{const r=svg.getBoundingClientRect(),x=(ev.clientX-r.left)*640/r.width,y=(ev.clientY-r.top)*(svg.viewBox.baseVal.height)/r.height;
+      const eff=clamp(Math.floor((x-60)/130)+1,1,4),imp=clamp(4-Math.floor((y-16)/95),1,4);
+      if(eff!==a.eff||imp!==a.imp){a.eff=eff;a.imp=imp;svg.innerHTML=mxInner()}};
+    const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);save();render()};
+    addEventListener('pointermove',mv);addEventListener('pointerup',up)}}
+function actView(){
+  const opts=sel=>`<option value="">—</option>`+S.tree.nodes.map(n=>`<option value="${n.id}" ${n.id===sel?'selected':''}>${esc(nodeLabel(n.id))}</option>`).join('');
+  const lv=(id,k,v)=>`<select onchange="setA('${id}','${k}',+this.value);render()">${[1,2,3,4].map(x=>`<option ${x===v?'selected':''}>${x}</option>`).join('')}</select>`;
+  return`<div class="card"><h2>Actions candidates</h2><p class="sm mut">Chaque action répond à un objectif de l'arbre (bouton « ＋ action » à l'étape précédente) ou se crée ici. Notez l'impact et l'effort de 1 à 4, ou déplacez les points dans la matrice.</p>
+  <div class="bar"><button class="btn" onclick="addAct('')">＋ Action</button><button class="btn" onclick="keepQuick()">Retenir toutes les actions à fort impact (≥3)</button></div>
+  ${S.actions.length?`<div class="tw"><table><tr><th>#</th><th style="min-width:220px">Action</th><th style="min-width:200px">Objectif lié</th><th>Responsable</th><th>Impact</th><th>Effort</th><th>Catégorie</th><th>Retenue</th><th></th></tr>${S.actions.map((a,i)=>`<tr><td>A${i+1}</td><td><input value="${esc(a.t)}" onchange="setA('${a.id}','t',this.value)"></td><td><select onchange="setA('${a.id}','obj',this.value)">${opts(a.obj)}</select></td><td><input value="${esc(a.resp)}" onchange="setA('${a.id}','resp',this.value)"></td><td>${lv(a.id,'imp',a.imp)}</td><td>${lv(a.id,'eff',a.eff)}</td><td>${quad(a)}</td><td><input type="checkbox" style="width:auto" ${a.keep?'checked':''} onchange="setA('${a.id}','keep',this.checked);render()"></td><td><button class="btn sm bad" onclick="delA('${a.id}')">✕</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Aucune action pour l\'instant.</p>'}</div>
+  <div class="card"><h2>Matrice impact / effort</h2><svg id="mx" class="mxc" viewBox="0 0 590 446" font-family="system-ui">${mxInner()}</svg><p class="sm mut">Points verts = actions retenues. Glissez un point pour modifier son impact et son effort.</p></div>`}
+function ph4(){return`<div class="tabs"><button class="${p4==='obj'?'on':''}" onclick="p4='obj';render()">Arbre à objectifs</button><button class="${p4==='act'?'on':''}" onclick="p4='act';render()">Actions &amp; matrice impact/effort</button></div>`+(p4==='obj'?objView():actView())}
+
+/* ---------- Phase 5 : Cadre logique et PDCA ---------- */
+const LV=['Objectif global','Objectif spécifique','Résultat attendu','Activité'];
+function genLF(){
+  const add=(l,t,src)=>{if(!t||S.logframe.some(r=>r.src===src))return;S.logframe.push({id:uid(),lvl:l,t,iov:'',sv:'',hyp:'',src})};
+  const ot=n=>(S.obj[n.id]&&S.obj[n.id].t)||n.text;
+  S.tree.nodes.filter(n=>n.type==='effect').forEach(n=>add(0,ot(n),'n:'+n.id));
+  S.tree.nodes.filter(n=>n.type==='problem').forEach(n=>add(1,ot(n),'n:'+n.id));
+  S.tree.nodes.filter(n=>n.type==='cause').forEach(n=>add(2,ot(n),'n:'+n.id));
+  S.actions.filter(a=>a.keep).forEach(a=>add(3,a.t,'a:'+a.id));
+  S.logframe.sort((a,b)=>a.lvl-b.lvl);save();render()}
+function setLF(id,k,v){const r=S.logframe.find(x=>x.id===id);if(r){r[k]=v;save()}}
+function delLF(id){S.logframe=S.logframe.filter(r=>r.id!==id);save();render()}
+function addLF(){S.logframe.push({id:uid(),lvl:3,t:'',iov:'',sv:'',hyp:'',src:''});save();render()}
+function pd(id){return S.pdca[id]||(S.pdca[id]={cycle:1,resp:'',start:'',end:'',res:'',pl:'',st:'À faire',pr:0,dn:'',ind:'',tg:'',ac:'',dt:'',ck:'',dec:'Standardiser',an:'',hist:[]})}
+function setPd(id,k,v){pd(id)[k]=v;save()}
+function closeCycle(id){const p=pd(id);p.hist.push({cycle:p.cycle,pr:p.pr,ind:p.ind,tg:p.tg,ac:p.ac,dec:p.dec,an:p.an,date:new Date().toLocaleDateString('fr-FR')});
+  p.cycle++;p.pr=0;p.ac='';p.ck='';p.dn='';p.an='';p.dt='';p.st='En cours';save();render()}
+function keepAll(){S.actions.forEach(a=>a.keep=true);save();render()}
+function lfView(){
+  return`<div class="card"><h2>Cadre logique</h2><p class="sm mut">Objectifs et résultats viennent de l'arbre à objectifs ; les activités sont les actions retenues. Complétez les indicateurs, les sources de vérification et les hypothèses.</p>
+  <div class="bar"><button class="btn pri" onclick="genLF()">Générer / compléter depuis les phases 3 et 4</button><button class="btn" onclick="addLF()">＋ Ligne</button></div>
+  ${S.logframe.length?`<div class="tw"><table><tr><th>Niveau</th><th style="min-width:220px">Logique d'intervention</th><th style="min-width:180px">Indicateurs objectivement vérifiables</th><th style="min-width:160px">Sources de vérification</th><th style="min-width:160px">Hypothèses / risques</th><th></th></tr>${S.logframe.map(r=>`<tr><td><select onchange="setLF('${r.id}','lvl',+this.value)">${LV.map((l,i)=>`<option value="${i}" ${r.lvl===i?'selected':''}>${l}</option>`).join('')}</select></td><td><textarea rows="2" onchange="setLF('${r.id}','t',this.value)">${esc(r.t)}</textarea></td><td><textarea rows="2" onchange="setLF('${r.id}','iov',this.value)">${esc(r.iov)}</textarea></td><td><textarea rows="2" onchange="setLF('${r.id}','sv',this.value)">${esc(r.sv)}</textarea></td><td><textarea rows="2" onchange="setLF('${r.id}','hyp',this.value)">${esc(r.hyp)}</textarea></td><td><button class="btn sm bad" onclick="delLF('${r.id}')">✕</button></td></tr>`).join('')}</table></div>`:'<p class="mut">Cadre logique vide.</p>'}</div>`}
+function pdcaView(){
+  const A=S.actions.filter(a=>a.keep);
+  if(!A.length)return`<div class="card"><p class="mut">Aucune action retenue. Retenez des actions en phase 4 ou <button class="btn sm" onclick="keepAll()">retenir toutes les actions</button>.</p></div>`;
+  const done=A.filter(a=>pd(a.id).st==='Terminé').length,avg=Math.round(A.reduce((s,a)=>s+(+pd(a.id).pr||0),0)/A.length);
+  const inp=(id,k,l,t)=>`<label>${l}</label><input ${t==='date'?'type="date"':''} value="${esc(pd(id)[k])}" onchange="setPd('${id}','${k}',this.value)">`;
+  const ta=(id,k,l)=>`<label>${l}</label><textarea rows="2" onchange="setPd('${id}','${k}',this.value)">${esc(pd(id)[k])}</textarea>`;
+  return`<div class="card"><h2>Tableau de suivi PDCA</h2><div class="bar"><b>${A.length}</b> actions · <b>${done}</b> terminée(s) · avancement moyen <b>${avg}%</b></div><div class="prog"><i style="width:${avg}%"></i></div></div>`+
+  A.map(a=>{const p=pd(a.id),tg=parseFloat(p.tg),ac=parseFloat(p.ac),att=(isFinite(tg)&&tg!==0&&isFinite(ac))?Math.round(ac/tg*100):null;
+    return`<div class="card"><div class="bar"><b>A${S.actions.indexOf(a)+1} – ${esc(a.t)||'(sans titre)'}</b><span class="pill b">Cycle ${p.cycle}</span><span class="pill ${p.st==='Terminé'?'g':p.st==='En cours'?'o':''}">${p.st}</span><span class="pill">${quad(a)}</span><span style="flex:1"></span><button class="btn sm" onclick="closeCycle('${a.id}')">Clôturer le cycle → cycle suivant</button></div>
+    <div class="pcol"><div class="P"><h4>P · Planifier</h4>${ta(a.id,'pl','Ce qui sera fait')}${inp(a.id,'resp','Responsable')}${inp(a.id,'start','Début','date')}${inp(a.id,'end','Échéance','date')}${ta(a.id,'res','Ressources')}</div>
+    <div class="D"><h4>D · Réaliser</h4><label>Statut</label><select onchange="setPd('${a.id}','st',this.value);render()">${['À faire','En cours','Terminé','Bloqué'].map(s=>`<option ${p.st===s?'selected':''}>${s}</option>`).join('')}</select><label>Avancement : ${p.pr}%</label><input type="range" min="0" max="100" step="5" value="${p.pr}" onchange="setPd('${a.id}','pr',+this.value);render()">${ta(a.id,'dn','Ce qui a été réalisé / difficultés')}</div>
+    <div class="C"><h4>C · Vérifier</h4>${inp(a.id,'ind','Indicateur')}${inp(a.id,'tg','Cible')}${inp(a.id,'ac','Valeur réelle')}${att!==null?`<p class="sm"><b>Atteinte : ${att}%</b></p>`:''}${inp(a.id,'dt','Date de revue','date')}${ta(a.id,'ck','Constats / écarts')}</div>
+    <div class="A"><h4>A · Agir</h4><label>Décision</label><select onchange="setPd('${a.id}','dec',this.value)">${['Standardiser','Ajuster et relancer','Abandonner','Étendre'].map(s=>`<option ${p.dec===s?'selected':''}>${s}</option>`).join('')}</select>${ta(a.id,'an','Actions correctives / leçons')}</div></div>
+    ${p.hist.length?`<details><summary>Historique des cycles (${p.hist.length})</summary><table><tr><th>Cycle</th><th>Date</th><th>Avancement</th><th>Indicateur</th><th>Cible</th><th>Réel</th><th>Décision</th><th>Notes</th></tr>${p.hist.map(h=>`<tr><td>${h.cycle}</td><td>${h.date}</td><td>${h.pr}%</td><td>${esc(h.ind)}</td><td>${esc(h.tg)}</td><td>${esc(h.ac)}</td><td>${esc(h.dec)}</td><td>${esc(h.an)}</td></tr>`).join('')}</table></details>`:''}</div>`}).join('')}
+function ph5(){return`<div class="tabs"><button class="${p5==='lf'?'on':''}" onclick="p5='lf';render()">Cadre logique</button><button class="${p5==='pdca'?'on':''}" onclick="p5='pdca';render()">Suivi PDCA</button></div>`+(p5==='lf'?lfView():pdcaView())}
+
+/* ---------- Liaison Google Sheet ---------- */
+function buildTables(){
+  const Pr=S.problems,rows=stats(),T={};
+  T['1_QQOQCCP']=[['ID','Problème','Quoi','Qui','Où','Quand','Comment','Combien','Pourquoi','Gravité']].concat(Pr.map((p,i)=>['P'+(i+1),p.t,p.q,p.w,p.o,p.d,p.c,p.m,p.y,p.g]));
+  T['2_Matrice']=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(Pr.map((a,i)=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))));
+  T['2_Pareto']=[['Rang','ID','Problème','Exercée','Reçue','Gravité','Score','%','% cumulé','Rôle','Prioritaire']].concat(rows.map((r,k)=>[k+1,'P'+(r.i+1),r.p.t,r.act,r.pas,r.g,r.score,+r.pct.toFixed(1),+r.cum.toFixed(1),r.role,r.prio?'Oui':'Non']));
+  const typ={problem:'Problème',cause:'Cause',effect:'Effet'},tx=id=>(nodeOf(id)||{}).text||'';
+  T['3_Arbre']=[['ID','Type','Texte','Est cause de (liens)']].concat(S.tree.nodes.map(n=>[n.id,typ[n.type],n.text,S.tree.edges.filter(e=>e.from===n.id).map(e=>tx(e.to)).join(' ; ')]));
+  const ac=[['Problème','Méthode','Famille / niveau','Cause']];
+  Object.keys(S.whys).forEach(k=>(S.whys[k]||[]).forEach((t,i)=>{if(t)ac.push([tx(k),'5 Pourquoi','Pourquoi '+(i+1),t])}));
+  Object.keys(S.ishi).forEach(k=>CATS.forEach(c=>((S.ishi[k]||{})[c]||'').split('\n').filter(Boolean).forEach(t=>ac.push([tx(k),'Ishikawa',c,t]))));
+  T['3_Analyse_causes']=ac;
+  const ob={problem:'Objectif central',cause:'Moyen',effect:'Fin'};
+  T['4_Objectifs']=[['Type','Problème d\'origine','Objectif']].concat(S.tree.nodes.map(n=>[ob[n.type],n.text,(S.obj[n.id]||{}).t||'']));
+  T['4_Actions']=[['ID','Action','Objectif lié','Responsable','Impact','Effort','Catégorie','Retenue']].concat(S.actions.map((a,i)=>['A'+(i+1),a.t,a.obj?nodeLabel(a.obj):'',a.resp,a.imp,a.eff,quad(a),a.keep?'Oui':'Non']));
+  T['5_CadreLogique']=[['Niveau','Logique d\'intervention','Indicateurs','Sources de vérification','Hypothèses / risques']].concat(S.logframe.map(r=>[LV[r.lvl],r.t,r.iov,r.sv,r.hyp]));
+  T['5_PDCA']=[['Action','Cycle','Statut','Avancement %','Responsable','Début','Échéance','Indicateur','Cible','Réel','Date de revue','Décision','Notes']].concat(S.actions.filter(a=>a.keep).map(a=>{const p=pd(a.id);return[a.t,p.cycle,p.st,p.pr,p.resp,p.start,p.end,p.ind,p.tg,p.ac,p.dt,p.dec,p.an]}));
+  return T}
+function openCfg(){$('#cfgUrl').value=cfg.get('url');$('#cfgTok').value=cfg.get('token');$('#cfgAuto').checked=cfg.get('auto')==='1';$('#sheetLink').href=SHEET_URL;$('#cfg').showModal()}
+function saveCfg(){cfg.set('url',$('#cfgUrl').value.trim());cfg.set('token',$('#cfgTok').value.trim());cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();setStatus('Liaison enregistrée','ok')}
+async function cloudSave(){
+  const url=cfg.get('url');if(!url){openCfg();return}
+  setStatus('Envoi vers le Sheet…');
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',token:cfg.get('token'),state:S,tables:buildTables()})});
+    const j=await r.json();if(!j.ok)throw new Error(j.error||'réponse invalide');setStatus('Synchronisé à '+new Date().toLocaleTimeString('fr-FR'),'ok')}
+  catch(e){setStatus('Échec de l\'envoi : '+e.message,'bad')}}
+async function cloudLoad(){
+  const url=cfg.get('url');if(!url){openCfg();return}
+  setStatus('Chargement depuis le Sheet…');
+  try{const r=await fetch(url+(url.includes('?')?'&':'?')+'action=load&token='+encodeURIComponent(cfg.get('token')));const j=await r.json();
+    if(!j.ok)throw new Error(j.error||'réponse invalide');
+    if(!j.state){setStatus('Le Sheet ne contient pas encore de données','bad');return}
+    if(confirm('Remplacer les données locales par celles du Sheet ?')){S=normalize(j.state);persist();render();setStatus('Données chargées','ok')}else setStatus('')}
+  catch(e){setStatus('Échec du chargement : '+e.message,'bad')}}
+
+render();
+</script>
+</body>
+</html>
