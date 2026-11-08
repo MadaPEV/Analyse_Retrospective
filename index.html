@@ -94,7 +94,7 @@ details summary{cursor:pointer;font-weight:600}
   <span class="sp"></span>
   <span id="status"></span>
   <button class="hb" onclick="syncNow(false)" title="Reçoit les saisies des autres acteurs, fusionne, puis envoie les vôtres">⟳ Synchroniser</button>
-  <button class="hb" onclick="openCfg()">⚙ Liaison Sheet</button>
+  <button class="hb" onclick="openCfg()">⚙ Paramètres</button>
   <button class="hb" onclick="exportJSON()">Exporter JSON</button>
   <button class="hb" onclick="$('#jsonIn').click()">Importer JSON</button>
   <input type="file" id="jsonIn" accept=".json" hidden>
@@ -103,20 +103,23 @@ details summary{cursor:pointer;font-weight:600}
 <main id="view"></main>
 
 <dialog id="cfg">
-  <h2>Liaison avec Google Sheet</h2>
-  <p class="mut sm">L'outil envoie ses données à un script Google Apps Script (fichier <b>Code.gs</b> fourni) qui les écrit dans votre Sheet. Les saisies de tous les acteurs sont <b>fusionnées</b> : chacun voit les problèmes des autres. Le Sheet contient un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
+  <h2>Paramètres de partage</h2>
+  <p class="mut sm">Les saisies de tous les acteurs sont <b>fusionnées</b> dans un tableau partagé : chacun voit les problèmes des autres. Le Sheet contient un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
   <label>Votre nom ou structure (affiché à côté des problèmes que vous saisissez)</label>
   <input id="cfgAuthor" placeholder="Ex. : DRSP Analamanga">
-  <label>URL de l'application web Apps Script (se termine par /exec)</label>
+  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Synchronisation automatique (envoi 5 s après une modification, réception toutes les 45 s)</label>
+  <details style="margin-top:10px"><summary class="sm">Paramètres avancés (administrateur)</summary>
+  <label>URL de l'application web Apps Script (…/exec)</label>
   <input id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
   <label>Jeton (facultatif, identique à la constante TOKEN du script)</label>
   <input id="cfgTok" placeholder="">
-  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Synchronisation automatique (envoi 5 s après une modification, réception toutes les 45 s)</label>
-  <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a></p>
+  <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a></p></details>
   <div class="bar"><button class="btn pri" onclick="saveCfg()">Enregistrer</button><button class="btn" onclick="$('#cfg').close()">Fermer</button></div>
 </dialog>
 
 <script>
+/* Liaison par défaut : les utilisateurs n'ont rien à configurer. Un administrateur peut la modifier ici. */
+const DEFAULTS={url:'https://script.google.com/macros/s/AKfycbwzyKi2vFv56MP5SJE9B-iRgoqnaxS-oPMDLUBFg021lpZdU9tBw4UyQpwmKr7hXbsPNw/exec',token:''};
 const SHEET_URL='https://docs.google.com/spreadsheets/d/1Kr7LsNXrBQMuYUElNAfOQ55OS4P67fg7ofREqVz9Ta8/edit?gid=0#gid=0';
 const $=(s,r=document)=>r.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -130,7 +133,7 @@ function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Obje
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
 let selP=null,p3m='why',selPb=null,p4='obj',p5='lf';
-const cfg={get:k=>{try{return localStorage.getItem('pbs_'+k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
+const cfg={get:k=>{let v='';try{v=localStorage.getItem('pbs_'+k)||''}catch(e){}return v||DEFAULTS[k]||''},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
 let autoT=null;
 function tomb(id){S.tomb[id]=Date.now()}
 function persist(){try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}}
@@ -525,7 +528,7 @@ function buildTables(){
   T['5_PDCA']=[['Action','Cycle','Statut','Avancement %','Responsable','Début','Échéance','Indicateur','Cible','Réel','Date de revue','Décision','Notes']].concat(S.actions.filter(a=>a.keep).map(a=>{const p=pd(a.id);return[a.t,p.cycle,p.st,p.pr,p.resp,p.start,p.end,p.ind,p.tg,p.ac,p.dt,p.dec,p.an]}));
   return T}
 function openCfg(){$('#cfgAuthor').value=cfg.get('author');$('#cfgUrl').value=cfg.get('url');$('#cfgTok').value=cfg.get('token');$('#cfgAuto').checked=cfg.get('auto')!=='0';$('#sheetLink').href=SHEET_URL;$('#cfg').showModal()}
-function saveCfg(){cfg.set('author',$('#cfgAuthor').value.trim());cfg.set('url',$('#cfgUrl').value.trim());cfg.set('token',$('#cfgTok').value.trim());cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();if(cfg.get('url'))syncNow(false);else setStatus('Liaison enregistrée','ok')}
+function saveCfg(){cfg.set('author',$('#cfgAuthor').value.trim());{const u=$('#cfgUrl').value.trim(),t=$('#cfgTok').value.trim();cfg.set('url',u===DEFAULTS.url?'':u);cfg.set('token',t===DEFAULTS.token?'':t)}cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();if(cfg.get('url'))syncNow(false);else setStatus('Liaison enregistrée','ok')}
 async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("l'URL n'a pas répondu comme le script. Vérifiez qu'il s'agit de l'URL de l'application web (…/exec), que l'accès est réglé sur « Tous » et que la dernière version est déployée.")}}
 
 /* Fusion de deux états : union des enregistrements par identifiant, suppressions propagées (tomb), le plus récent l'emporte en cas de conflit */
@@ -573,6 +576,7 @@ async function syncNow(silent){
 setInterval(()=>{if(cfg.get('url')&&cfg.get('auto')!=='0')syncNow(true)},45000);
 
 render();
+if(!cfg.get('author'))setTimeout(openCfg,400);
 if(cfg.get('url'))syncNow(true);
 </script>
 </body>
