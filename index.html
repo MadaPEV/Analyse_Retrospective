@@ -93,8 +93,7 @@ details summary{cursor:pointer;font-weight:600}
   <input class="ti" id="ptitle" placeholder="Titre de l'analyse" onchange="S.title=this.value;save()">
   <span class="sp"></span>
   <span id="status"></span>
-  <button class="hb" onclick="cloudSave()">⬆ Envoyer au Sheet</button>
-  <button class="hb" onclick="cloudLoad()">⬇ Charger du Sheet</button>
+  <button class="hb" onclick="syncNow(false)" title="Reçoit les saisies des autres acteurs, fusionne, puis envoie les vôtres">⟳ Synchroniser</button>
   <button class="hb" onclick="openCfg()">⚙ Liaison Sheet</button>
   <button class="hb" onclick="exportJSON()">Exporter JSON</button>
   <button class="hb" onclick="$('#jsonIn').click()">Importer JSON</button>
@@ -105,12 +104,14 @@ details summary{cursor:pointer;font-weight:600}
 
 <dialog id="cfg">
   <h2>Liaison avec Google Sheet</h2>
-  <p class="mut sm">L'outil envoie ses données à un script Google Apps Script (fichier <b>Code.gs</b> fourni) qui les écrit dans votre Sheet : un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
+  <p class="mut sm">L'outil envoie ses données à un script Google Apps Script (fichier <b>Code.gs</b> fourni) qui les écrit dans votre Sheet. Les saisies de tous les acteurs sont <b>fusionnées</b> : chacun voit les problèmes des autres. Le Sheet contient un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
+  <label>Votre nom ou structure (affiché à côté des problèmes que vous saisissez)</label>
+  <input id="cfgAuthor" placeholder="Ex. : DRSP Analamanga">
   <label>URL de l'application web Apps Script (se termine par /exec)</label>
   <input id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
   <label>Jeton (facultatif, identique à la constante TOKEN du script)</label>
   <input id="cfgTok" placeholder="">
-  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Envoi automatique après chaque modification (5 s)</label>
+  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Synchronisation automatique (envoi 5 s après une modification, réception toutes les 45 s)</label>
   <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a></p>
   <div class="bar"><button class="btn pri" onclick="saveCfg()">Enregistrer</button><button class="btn" onclick="$('#cfg').close()">Fermer</button></div>
 </dialog>
@@ -124,15 +125,16 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{}}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{}}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
 let selP=null,p3m='why',selPb=null,p4='obj',p5='lf';
 const cfg={get:k=>{try{return localStorage.getItem('pbs_'+k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
 let autoT=null;
+function tomb(id){S.tomb[id]=Date.now()}
 function persist(){try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}}
-function save(){S.updated=Date.now();persist();if(cfg.get('auto')==='1'&&cfg.get('url')){clearTimeout(autoT);autoT=setTimeout(cloudSave,5000)}}
+function save(){S.updated=Date.now();persist();if(cfg.get('auto')!=='0'&&cfg.get('url')){clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true),5000)}}
 function setStatus(m,k){const s=$('#status');s.textContent=m;s.className=k||''}
 const nodeOf=id=>S.tree.nodes.find(n=>n.id===id);
 const emptyMsg=t=>`<div class="card"><p class="mut">${t}</p></div>`;
@@ -151,25 +153,51 @@ function render(){
 
 /* ---------- Phase 1 : QQOQCCP ---------- */
 const QF=[['q','Quoi ?','Quel est le problème ? Que se passe-t-il exactement ?'],['w','Qui ?','Qui est concerné ou impliqué (acteurs, bénéficiaires, structures) ?'],['o','Où ?','Lieux : régions, districts, CSB, communautés…'],['d','Quand ?','Depuis quand ? À quelle fréquence ? Période ?'],['c','Comment ?','Manifestations, circonstances, déroulement'],['m','Combien ?','Ampleur, chiffres, coûts, proportion touchée'],['y','Pourquoi ?','Causes pressenties, hypothèses (à vérifier en phase 3)']];
-function plistHTML(){return S.problems.map((p,i)=>{const n=QF.filter(f=>p[f[0]]).length;return`<div class="pi ${p.id===selP?'on':''}" onclick="selP='${p.id}';render()"><b>P${i+1}</b> ${esc(p.t)||'<i>(sans titre)</i>'}<small>${n}/7 QQOQCCP · gravité ${p.g}</small><button class="x" title="Supprimer" onclick="event.stopPropagation();delP('${p.id}')">✕</button></div>`}).join('')||'<p class="mut">Aucun problème pour l’instant. Lancez le brainstorming ci-dessus.</p>'}
+const STOP=new Set(['de','du','des','la','le','les','et','en','aux','une','dans','pour','sur','par','que','qui','ses','son','leur','leurs']);
+const toks=s=>(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w)).map(w=>w.replace(/(s|x)$/,''));
+function isDup(a,b){const A=new Set(toks(a)),B=new Set(toks(b));if(!A.size||!B.size)return false;let i=0;A.forEach(x=>{if(B.has(x))i++});return i/(A.size+B.size-i)>=0.5||(i>=2&&i/Math.min(A.size,B.size)>=0.8)}
+function myName(){let a=cfg.get('author');if(!a){a=(prompt('Votre nom ou structure (affiché à côté des problèmes que vous saisissez) :')||'').trim();if(a)cfg.set('author',a)}return a||'Anonyme'}
+function pItem(p,i){const n=QF.filter(f=>p[f[0]]).length;return`<div class="pi ${p.id===selP?'on':''}" onclick="selP='${p.id}';render()"><b>P${i+1}</b> ${esc(p.t)||'<i>(sans titre)</i>'}<small>${n}/7 QQOQCCP · gravité ${p.g}</small><button class="x" title="Supprimer" onclick="event.stopPropagation();delP('${p.id}')">✕</button></div>`}
+function plistHTML(){
+  const me=cfg.get('author')||'Anonyme',mine=[],others={};
+  S.problems.forEach((p,i)=>{if(!p.by||p.by===me)mine.push([p,i]);else(others[p.by]=others[p.by]||[]).push([p,i])});
+  const names=Object.keys(others),no=names.reduce((s,k)=>s+others[k].length,0);
+  const a=`<div style="margin-bottom:14px"><div class="bar" style="margin:0 0 4px"><b>Mes problèmes</b> <span class="pill g">${mine.length}</span></div>${mine.map(x=>pItem(x[0],x[1])).join('')||'<p class="mut sm">Vous n’avez encore saisi aucun problème.</p>'}</div>`;
+  const b=`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:8px 10px"><div class="bar" style="margin:0 0 4px"><b>Saisis par les autres acteurs</b> <span class="pill b">${no}</span></div>${names.map(n=>`<div class="sm mut" style="margin:8px 0 2px;font-weight:600">${esc(n)} (${others[n].length})</div>`+others[n].map(x=>pItem(x[0],x[1])).join('')).join('')||'<p class="mut sm">Aucun problème saisi par d’autres acteurs pour l’instant. Cliquez sur « ⟳ Synchroniser » pour actualiser.</p>'}</div>`;
+  return a+b}
+function dupPairs(){const out=[];for(let i=0;i<S.problems.length;i++)for(let j=i+1;j<S.problems.length;j++){const a=S.problems[i],b=S.problems[j];if(S.ign[a.id+'|'+b.id])continue;if(isDup(a.t,b.t))out.push([a,b])}return out}
+function dupHTML(){const d=dupPairs();if(!d.length)return'';
+  return`<div class="card" style="border-color:#f59e0b;background:#fffbeb"><h3 style="margin-top:0">Doublons possibles (${d.length})</h3><p class="sm mut">Ces problèmes se ressemblent. Fusionnez-les pour éviter la redondance (liens de la matrice et de l'arbre conservés).</p>`+d.map(([a,b])=>`<div class="or"><b>P${S.problems.indexOf(a)+1}</b> ${esc(a.t)} <span class="mut sm">(${esc(a.by||'—')})</span><br><b>P${S.problems.indexOf(b)+1}</b> ${esc(b.t)} <span class="mut sm">(${esc(b.by||'—')})</span><div class="bar"><button class="btn sm pri" onclick="mergeProb('${a.id}','${b.id}')">Fusionner dans P${S.problems.indexOf(a)+1}</button><button class="btn sm" onclick="ignDup('${a.id}','${b.id}')">Problèmes distincts</button></div></div>`).join('')+'</div>'}
 function ph1(){
   const p=S.problems.find(x=>x.id===selP);
-  const ed=p?`<h2>Décrire le problème P${S.problems.indexOf(p)+1}</h2>
+  const ed=p?`<h2>Décrire le problème P${S.problems.indexOf(p)+1} <span class="mut sm" style="font-weight:400">${p.by?'saisi par '+esc(p.by):''}</span></h2>
    <label>Intitulé du problème</label><input value="${esc(p.t)}" onchange="setP('${p.id}','t',this.value);$('#plist').innerHTML=plistHTML()">
    ${QF.map(f=>`<label>${f[1]} <span class="mut" style="font-weight:400">${f[2]}</span></label><textarea rows="2" onchange="setP('${p.id}','${f[0]}',this.value);$('#plist').innerHTML=plistHTML()">${esc(p[f[0]])}</textarea>`).join('')}
    <label>Gravité perçue (utilisée dans le score de la phase 2)</label>
    <select onchange="setP('${p.id}','g',+this.value);$('#plist').innerHTML=plistHTML()">${[1,2,3,4,5].map(v=>`<option value="${v}" ${p.g===v?'selected':''}>${v} – ${['Mineure','Modérée','Importante','Grave','Critique'][v-1]}</option>`).join('')}</select>`
    :`<h2>Fiche QQOQCCP</h2><p class="mut">Sélectionnez un problème dans la liste (ou ajoutez-en) pour le décrire avec les 7 questions.</p>`;
-  return`<div class="grid2"><div class="card"><h2>Brainstorming</h2><p class="mut sm">Listez tous les problèmes rencontrés sur le terrain, un par ligne. Pas de jugement à ce stade.</p>
+  return`${dupHTML()}<div class="grid2"><div class="card"><h2>Brainstorming</h2><p class="mut sm">Listez tous les problèmes rencontrés sur le terrain, un par ligne. Les problèmes déjà saisis par les autres acteurs apparaissent dans la liste : vérifiez-la avant d'ajouter.</p>
   <textarea id="bs" rows="5" placeholder="Ex. : Retard de paiement des agents communautaires"></textarea>
   <div class="bar"><button class="btn pri" onclick="addBS()">Ajouter à la liste</button></div>
   <h3>Problèmes identifiés (${S.problems.length})</h3><div id="plist">${plistHTML()}</div></div><div class="card">${ed}</div></div>`;
 }
-function addBS(){const t=$('#bs').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!t.length)return;
-  t.forEach(x=>S.problems.push({id:uid(),t:x,g:3,q:'',w:'',o:'',d:'',c:'',m:'',y:''}));selP=S.problems[S.problems.length-1].id;save();render()}
-function setP(id,k,v){const p=S.problems.find(x=>x.id===id);if(p){p[k]=v;save()}}
-function delP(id){if(!confirm('Supprimer ce problème et ses croisements ?'))return;
-  S.problems=S.problems.filter(p=>p.id!==id);Object.keys(S.matrix).forEach(k=>{if(k.split('|').includes(id))delete S.matrix[k]});delete S.sel[id];if(selP===id)selP=null;save();render()}
+async function addBS(){const t=$('#bs').value.split('\n').map(s=>s.trim()).filter(Boolean);if(!t.length)return;
+  const by=myName();if(cfg.get('url'))await syncNow(true);
+  let added=0;
+  t.forEach(x=>{const d=S.problems.find(q=>isDup(q.t,x));
+    if(d&&!confirm('« '+x+' » ressemble à un problème déjà saisi :\n« '+d.t+' »'+(d.by?' (par '+d.by+')':'')+'\n\nL\'ajouter quand même ?'))return;
+    S.problems.push({id:uid(),t:x,g:3,q:'',w:'',o:'',d:'',c:'',m:'',y:'',by,ts:Date.now()});added++});
+  if(!added)return;selP=S.problems[S.problems.length-1].id;save();render()}
+function setP(id,k,v){const p=S.problems.find(x=>x.id===id);if(p){p[k]=v;p.ts=Date.now();save()}}
+function delP(id){if(!confirm('Supprimer ce problème et ses croisements ? Il disparaîtra aussi chez les autres acteurs.'))return;
+  S.problems=S.problems.filter(p=>p.id!==id);Object.keys(S.matrix).forEach(k=>{if(k.split('|').includes(id))delete S.matrix[k]});delete S.sel[id];tomb(id);if(selP===id)selP=null;save();render()}
+function ignDup(a,b){S.ign[a+'|'+b]=1;save();render()}
+function mergeProb(k,d){const A=S.problems.find(p=>p.id===k),B=S.problems.find(p=>p.id===d);if(!A||!B)return;const now=Date.now();
+  QF.forEach(f=>{if(!A[f[0]]&&B[f[0]])A[f[0]]=B[f[0]]});A.ts=now;
+  Object.keys(S.matrix).forEach(key=>{const[a,b]=key.split('|');if(a!==d&&b!==d)return;const v=+S.matrix[key]||0;delete S.matrix[key];
+    const na=a===d?k:a,nb=b===d?k:b;if(na===nb)return;const nk=na+'|'+nb;S.matrix[nk]=Math.max(+S.matrix[nk]||0,v);S.mts[nk]=now});
+  S.tree.nodes.forEach(n=>{if(n.pid===d)n.pid=k});
+  S.problems=S.problems.filter(p=>p.id!==d);delete S.sel[d];tomb(d);if(selP===d)selP=k;save();render()}
 
 /* ---------- Phase 2 : Pareto par croisement ---------- */
 function stats(){
@@ -193,7 +221,7 @@ function paretoSVG(rows){
   s+=`<polyline points="${pts}" fill="none" stroke="#1d4ed8" stroke-width="2"/>`+rows.map((r,i)=>`<circle cx="${L+i*bw+bw/2}" cy="${T+h*(1-r.cum/100)}" r="3.5" fill="#1d4ed8"/>`).join('');
   return s+'</svg>';
 }
-function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;if(v)S.matrix[k]=v;else delete S.matrix[k];save();render()}
+function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;S.matrix[k]=v;S.mts[k]=Date.now();save();render()}
 function setSel(id,v){S.sel[id]=v;save();render()}
 function ph2(){
   const Pr=S.problems;if(Pr.length<2)return emptyMsg('Ajoutez au moins deux problèmes en phase 1 pour pouvoir les croiser.');
@@ -208,7 +236,7 @@ function ph2(){
   ${paretoSVG(rows)}
   <div class="bar"><b>${np} problème(s) prioritaire(s)</b><button class="btn sm" onclick="S.sel={};save();render()">Revenir au seuil automatique 80 %</button></div>
   <div class="tw"><table><tr><th>Rang</th><th>Problème</th><th>Exercée</th><th>Reçue</th><th>Gravité</th><th>Score</th><th>%</th><th>% cumulé</th><th>Rôle</th><th>Prioritaire</th></tr>
-  ${rows.map((r,k)=>`<tr style="${r.prio?'background:#ecfdf5':''}"><td>${k+1}</td><td><b>P${r.i+1}</b> ${esc(r.p.t)}</td><td>${r.act}</td><td>${r.pas}</td><td>${r.g}</td><td><b>${r.score}</b></td><td>${r.pct.toFixed(1)}</td><td>${r.cum.toFixed(1)}</td><td>${r.role}</td><td><input type="checkbox" style="width:auto" ${r.prio?'checked':''} onchange="setSel('${r.p.id}',this.checked)"></td></tr>`).join('')}</table></div>
+  ${rows.map((r,k)=>`<tr style="${r.prio?'background:#ecfdf5':''}"><td>${k+1}</td><td><b>P${r.i+1}</b> ${esc(r.p.t)}${r.p.by?` <span class="mut sm">· ${esc(r.p.by)}</span>`:''}</td><td>${r.act}</td><td>${r.pas}</td><td>${r.g}</td><td><b>${r.score}</b></td><td>${r.pct.toFixed(1)}</td><td>${r.cum.toFixed(1)}</td><td>${r.role}</td><td><input type="checkbox" style="width:auto" ${r.prio?'checked':''} onchange="setSel('${r.p.id}',this.checked)"></td></tr>`).join('')}</table></div>
   <div class="bar"><button class="btn pri" onclick="go(3)">Passer à l'arbre à problèmes →</button></div></div>`;
 }
 
@@ -216,7 +244,7 @@ function ph2(){
 const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Management"];
 function freeSpot(x,y){let g=0;while(S.tree.nodes.some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
 function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
-function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;S.tree.edges.push({from,to});return true}
+function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});return true}
 function importPrio(){
   const rows=stats().filter(r=>r.prio);let c=0;
   rows.forEach(r=>{if(S.tree.nodes.some(n=>n.pid===r.p.id))return;addNode('problem',r.p.t,60+c*200,300,r.p.id);c++});
@@ -263,34 +291,34 @@ function initTree(){
     if(e.target.closest('.lk')){e.preventDefault();startLink(nd,e)}
     else if(e.target.closest('.grip')&&!e.target.closest('button')&&!e.target.closest('.tl')){e.preventDefault();startMove(nd,e)}};
   st.onclick=e=>{
-    const eh=e.target.closest('.eh');if(eh){if(confirm('Supprimer ce lien de causalité ?')){S.tree.edges.splice(+eh.dataset.i,1);save();drawEdges()}return}
+    const eh=e.target.closest('.eh');if(eh){if(confirm('Supprimer ce lien de causalité ?')){const ed=S.tree.edges.splice(+eh.dataset.i,1)[0];tomb('e:'+ed.from+'>'+ed.to);save();drawEdges()}return}
     const nd=e.target.closest('.tn'),t=e.target.closest('[data-act]');if(!nd||!t)return;const n=nodeOf(nd.dataset.id),a=t.dataset.act;
     if(a==='type'){n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
     else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);save();render();focusNode(c.id)}
     else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);save();render();focusNode(c.id)}
-    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);save();render()}}
+    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
   };
   st.oninput=e=>{const t=e.target.closest('[data-act="txt"]');if(!t)return;const n=nodeOf(t.closest('.tn').dataset.id);n.text=t.innerText.replace(/\s+/g,' ').trim();drawEdges()};
   st.onfocusout=e=>{if(e.target.closest&&e.target.closest('[data-act="txt"]'))save()};
   st.onkeydown=e=>{if(e.key==='Enter'&&e.target.closest('[data-act="txt"]')){e.preventDefault();e.target.blur()}};
 }
 function focusNode(id){const t=$(`.tn[data-id="${id}"] .tx`);if(t){t.focus();const r=document.createRange();r.selectNodeContents(t);const s=getSelection();s.removeAllRanges();s.addRange(r)}}
-function startMove(nd,e){const n=nodeOf(nd.dataset.id),st=$('#stage'),r=nd.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
+function startMove(nd,e){dragging=true;const n=nodeOf(nd.dataset.id),st=$('#stage'),r=nd.getBoundingClientRect(),dx=e.clientX-r.left,dy=e.clientY-r.top;
   const mv=ev=>{const sr=st.getBoundingClientRect();n.x=Math.max(0,Math.round(ev.clientX-sr.left-dx));n.y=Math.max(0,Math.round(ev.clientY-sr.top-dy));nd.style.left=n.x+'px';nd.style.top=n.y+'px';drawEdges()};
-  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);save();fit()};
+  const up=()=>{dragging=false;removeEventListener('pointermove',mv);removeEventListener('pointerup',up);save();fit()};
   addEventListener('pointermove',mv);addEventListener('pointerup',up)}
-function startLink(nd,e){const st=$('#stage'),svg=$('#ed'),id=nd.dataset.id;
+function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.dataset.id;
   const ns='http://www.w3.org/2000/svg',rb=document.createElementNS(ns,'path');rb.setAttribute('stroke','#0f766e');rb.setAttribute('stroke-width','2');rb.setAttribute('stroke-dasharray','5 4');rb.setAttribute('fill','none');svg.appendChild(rb);
   const sx=nd.offsetLeft+nd.offsetWidth/2,sy=nd.offsetTop+nd.offsetHeight/2;
   const mv=ev=>{const sr=st.getBoundingClientRect();rb.setAttribute('d',`M${sx} ${sy} L${ev.clientX-sr.left} ${ev.clientY-sr.top}`)};
-  const up=ev=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);rb.remove();
+  const up=ev=>{dragging=false;removeEventListener('pointermove',mv);removeEventListener('pointerup',up);rb.remove();
     const t=document.elementFromPoint(ev.clientX,ev.clientY),tn=t&&t.closest('.tn');
     if(tn&&tn.dataset.id!==id){const to=tn.dataset.id;
       if(S.tree.edges.some(x=>x.from===to&&x.to===id)){alert('Ce lien existe déjà dans le sens inverse.');return}
       if(ensureEdge(id,to)){save();drawEdges()}}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
 function addFree(type){const cv=$('#cv');const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',cv.scrollLeft+40,cv.scrollTop+40);save();render();focusNode(n.id)}
-function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree={nodes:[],edges:[]};S.map={};save();render()}}
+function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>tomb(n.id));S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};S.map={};save();render()}}
 function autoLayout(){
   const N=S.tree.nodes,E=S.tree.edges;if(!N.length)return;
   const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{if(adj[e.from]&&adj[e.to]){adj[e.from].push(e.to);adj[e.to].push(e.from)}});
@@ -377,7 +405,7 @@ function importMM(xml){
     [...el.children].filter(c=>c.tagName==='node').forEach(c=>walk(c,ctx))}
   walk(root,null);
   arrows.forEach(([f,d])=>{const t=idMap[d];if(t&&t!==f&&!edges.some(e=>e.from===f&&e.to===t))edges.push({from:f,to:t})});
-  S.tree={nodes,edges};S.map={};autoLayout();save();render();
+  const keepIds=new Set(nodes.map(n=>n.id));S.tree.nodes.forEach(n=>{if(!keepIds.has(n.id))tomb(n.id)});nodes.forEach(n=>{delete S.tomb[n.id]});S.tree={nodes,edges};S.map={};autoLayout();save();render();
 }
 function exportJSON(){download((S.title||'analyse').replace(/[^\w\-]+/g,'_')+'.json',JSON.stringify(S,null,1),'application/json')}
 $('#jsonIn').onchange=function(){const f=this.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{S=normalize(JSON.parse(r.result));persist();render()}catch(e){alert('Fichier JSON invalide')}this.value=''};r.readAsText(f)};
@@ -410,7 +438,7 @@ function objView(){
   return`<div class="bar"><button class="btn pri" onclick="autoAll()">Transformer automatiquement les problèmes vides en objectifs</button><span class="mut sm">Le texte proposé est une base à reformuler (état positif souhaité).</span></div>`+h}
 function addAct(nodeId){S.actions.push({id:uid(),t:'',obj:nodeId||'',resp:'',imp:2,eff:2,keep:false});p4='act';save();render()}
 function setA(id,k,v){const a=S.actions.find(x=>x.id===id);if(a){a[k]=v;save()}}
-function delA(id){if(!confirm('Supprimer cette action ?'))return;S.actions=S.actions.filter(a=>a.id!==id);delete S.pdca[id];save();render()}
+function delA(id){if(!confirm('Supprimer cette action ?'))return;S.actions=S.actions.filter(a=>a.id!==id);delete S.pdca[id];tomb(id);save();render()}
 function quad(a){const hi=a.imp>=3,lo=a.eff<=2;return hi&&lo?'Gain rapide':hi?'Projet majeur':lo?'Remplissage':'À écarter / reporter'}
 function nodeLabel(id){const n=nodeOf(id);if(!n)return'—';return((S.obj[id]&&S.obj[id].t)||n.text).slice(0,70)}
 function keepQuick(){S.actions.forEach(a=>a.keep=(a.imp>=3));save();render()}
@@ -451,7 +479,7 @@ function genLF(){
   S.actions.filter(a=>a.keep).forEach(a=>add(3,a.t,'a:'+a.id));
   S.logframe.sort((a,b)=>a.lvl-b.lvl);save();render()}
 function setLF(id,k,v){const r=S.logframe.find(x=>x.id===id);if(r){r[k]=v;save()}}
-function delLF(id){S.logframe=S.logframe.filter(r=>r.id!==id);save();render()}
+function delLF(id){S.logframe=S.logframe.filter(r=>r.id!==id);tomb(id);save();render()}
 function addLF(){S.logframe.push({id:uid(),lvl:3,t:'',iov:'',sv:'',hyp:'',src:''});save();render()}
 function pd(id){return S.pdca[id]||(S.pdca[id]={cycle:1,resp:'',start:'',end:'',res:'',pl:'',st:'À faire',pr:0,dn:'',ind:'',tg:'',ac:'',dt:'',ck:'',dec:'Standardiser',an:'',hist:[]})}
 function setPd(id,k,v){pd(id)[k]=v;save()}
@@ -481,7 +509,7 @@ function ph5(){return`<div class="tabs"><button class="${p5==='lf'?'on':''}" onc
 /* ---------- Liaison Google Sheet ---------- */
 function buildTables(){
   const Pr=S.problems,rows=stats(),T={};
-  T['1_QQOQCCP']=[['ID','Problème','Quoi','Qui','Où','Quand','Comment','Combien','Pourquoi','Gravité']].concat(Pr.map((p,i)=>['P'+(i+1),p.t,p.q,p.w,p.o,p.d,p.c,p.m,p.y,p.g]));
+  T['1_QQOQCCP']=[['ID','Problème','Quoi','Qui','Où','Quand','Comment','Combien','Pourquoi','Gravité','Auteur']].concat(Pr.map((p,i)=>['P'+(i+1),p.t,p.q,p.w,p.o,p.d,p.c,p.m,p.y,p.g,p.by||'']));
   T['2_Matrice']=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(Pr.map((a,i)=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))));
   T['2_Pareto']=[['Rang','ID','Problème','Exercée','Reçue','Gravité','Score','%','% cumulé','Rôle','Prioritaire']].concat(rows.map((r,k)=>[k+1,'P'+(r.i+1),r.p.t,r.act,r.pas,r.g,r.score,+r.pct.toFixed(1),+r.cum.toFixed(1),r.role,r.prio?'Oui':'Non']));
   const typ={problem:'Problème',cause:'Cause',effect:'Effet'},tx=id=>(nodeOf(id)||{}).text||'';
@@ -496,24 +524,56 @@ function buildTables(){
   T['5_CadreLogique']=[['Niveau','Logique d\'intervention','Indicateurs','Sources de vérification','Hypothèses / risques']].concat(S.logframe.map(r=>[LV[r.lvl],r.t,r.iov,r.sv,r.hyp]));
   T['5_PDCA']=[['Action','Cycle','Statut','Avancement %','Responsable','Début','Échéance','Indicateur','Cible','Réel','Date de revue','Décision','Notes']].concat(S.actions.filter(a=>a.keep).map(a=>{const p=pd(a.id);return[a.t,p.cycle,p.st,p.pr,p.resp,p.start,p.end,p.ind,p.tg,p.ac,p.dt,p.dec,p.an]}));
   return T}
-function openCfg(){$('#cfgUrl').value=cfg.get('url');$('#cfgTok').value=cfg.get('token');$('#cfgAuto').checked=cfg.get('auto')==='1';$('#sheetLink').href=SHEET_URL;$('#cfg').showModal()}
-function saveCfg(){cfg.set('url',$('#cfgUrl').value.trim());cfg.set('token',$('#cfgTok').value.trim());cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();setStatus('Liaison enregistrée','ok')}
-async function cloudSave(){
-  const url=cfg.get('url');if(!url){openCfg();return}
-  setStatus('Envoi vers le Sheet…');
-  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',token:cfg.get('token'),state:S,tables:buildTables()})});
-    const j=await r.json();if(!j.ok)throw new Error(j.error||'réponse invalide');setStatus('Synchronisé à '+new Date().toLocaleTimeString('fr-FR'),'ok')}
-  catch(e){setStatus('Échec de l\'envoi : '+e.message,'bad')}}
-async function cloudLoad(){
-  const url=cfg.get('url');if(!url){openCfg();return}
-  setStatus('Chargement depuis le Sheet…');
-  try{const r=await fetch(url+(url.includes('?')?'&':'?')+'action=load&token='+encodeURIComponent(cfg.get('token')));const j=await r.json();
-    if(!j.ok)throw new Error(j.error||'réponse invalide');
-    if(!j.state){setStatus('Le Sheet ne contient pas encore de données','bad');return}
-    if(confirm('Remplacer les données locales par celles du Sheet ?')){S=normalize(j.state);persist();render();setStatus('Données chargées','ok')}else setStatus('')}
-  catch(e){setStatus('Échec du chargement : '+e.message,'bad')}}
+function openCfg(){$('#cfgAuthor').value=cfg.get('author');$('#cfgUrl').value=cfg.get('url');$('#cfgTok').value=cfg.get('token');$('#cfgAuto').checked=cfg.get('auto')!=='0';$('#sheetLink').href=SHEET_URL;$('#cfg').showModal()}
+function saveCfg(){cfg.set('author',$('#cfgAuthor').value.trim());cfg.set('url',$('#cfgUrl').value.trim());cfg.set('token',$('#cfgTok').value.trim());cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();if(cfg.get('url'))syncNow(false);else setStatus('Liaison enregistrée','ok')}
+async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("l'URL n'a pas répondu comme le script. Vérifiez qu'il s'agit de l'URL de l'application web (…/exec), que l'accès est réglé sur « Tous » et que la dernière version est déployée.")}}
+
+/* Fusion de deux états : union des enregistrements par identifiant, suppressions propagées (tomb), le plus récent l'emporte en cas de conflit */
+function mergeState(L,R){
+  const lw=(L.updated||0)>=(R.updated||0),M=blank();
+  M.title=lw?L.title:R.title;M.updated=Math.max(L.updated||0,R.updated||0);
+  M.tomb=Object.assign({},R.tomb,L.tomb);
+  const dead=id=>M.tomb[id]!==undefined;
+  const union=(r,l,key,ts)=>{const m=new Map();(r||[]).forEach(x=>m.set(key(x),x));
+    (l||[]).forEach(x=>{const k=key(x),c=m.get(k);if(!c)m.set(k,x);else{const a=ts?(x[ts]||0):0,b=ts?(c[ts]||0):0;if(a>b||(a===b&&lw))m.set(k,x)}});return[...m.values()]};
+  const dict=(r,l)=>lw?Object.assign({},r,l):Object.assign({},l,r);
+  M.problems=union(R.problems,L.problems,p=>p.id,'ts').filter(p=>!dead(p.id));
+  const pid=new Set(M.problems.map(p=>p.id));
+  new Set([...Object.keys(R.matrix||{}),...Object.keys(L.matrix||{})]).forEach(k=>{
+    const[a,b]=k.split('|');if(!pid.has(a)||!pid.has(b))return;
+    const inL=k in(L.matrix||{}),inR=k in(R.matrix||{}),tl=(L.mts||{})[k]||0,tr=(R.mts||{})[k]||0;
+    const o=inL&&inR?((tl>tr||(tl===tr&&lw))?L:R):inL?L:R;M.matrix[k]=o.matrix[k];M.mts[k]=(o.mts||{})[k]||0});
+  M.sel={};const sel=dict(R.sel,L.sel);Object.keys(sel).forEach(k=>{if(pid.has(k))M.sel[k]=sel[k]});
+  M.ign=dict(R.ign,L.ign);
+  M.tree.nodes=union(R.tree.nodes,L.tree.nodes,n=>n.id).filter(n=>!dead(n.id));
+  const nid=new Set(M.tree.nodes.map(n=>n.id));
+  M.tree.edges=union(R.tree.edges,L.tree.edges,e=>e.from+'>'+e.to).filter(e=>nid.has(e.from)&&nid.has(e.to)&&!dead('e:'+e.from+'>'+e.to));
+  M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
+  M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
+  ['whys','ishi','map','obj','pdca'].forEach(k=>{M[k]=dict(R[k],L[k])});
+  return M}
+const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
+let dragging=false,syncing=false;
+function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
+async function syncNow(silent){
+  const url=cfg.get('url');if(!url){if(!silent)openCfg();return}
+  if(syncing||dragging)return;syncing=true;if(!silent)setStatus('Synchronisation…');
+  const tok=encodeURIComponent(cfg.get('token')),sep=url.includes('?')?'&':'?';
+  try{
+    for(let t=0;t<4;t++){
+      const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));
+      if(!r.ok)throw new Error(r.error||'réponse invalide');
+      const before=sig();if(r.state)S=mergeState(S,normalize(r.state));const changed=before!==sig();
+      const res=await readJSON(await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',token:cfg.get('token'),baseRev:r.rev||0,state:S,tables:buildTables()})}));
+      if(res.ok){persist();setStatus('Synchronisé à '+new Date().toLocaleTimeString('fr-FR'),'ok');if(changed)refreshView();return}
+      if(!res.conflict)throw new Error(res.error||'erreur');
+    }
+    throw new Error('conflits répétés, réessayez')
+  }catch(e){setStatus('Échec de la synchronisation : '+e.message,'bad')}finally{syncing=false}}
+setInterval(()=>{if(cfg.get('url')&&cfg.get('auto')!=='0')syncNow(true)},45000);
 
 render();
+if(cfg.get('url'))syncNow(true);
 </script>
 </body>
 </html>
