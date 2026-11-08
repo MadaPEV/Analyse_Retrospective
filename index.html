@@ -128,7 +128,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{}}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
@@ -252,13 +252,20 @@ const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Manage
 function freeSpot(x,y){let g=0;while(S.tree.nodes.some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
 function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
 function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});return true}
-function importPrio(){
-  const rows=stats().filter(r=>r.prio);let c=0;
-  rows.forEach(r=>{if(S.tree.nodes.some(n=>n.pid===r.p.id))return;addNode('problem',r.p.t,60+c*200,300,r.p.id);c++});
-  save();if(c)autoLayout();render()
-}
+/* Ajoute à l'arbre les problèmes prioritaires de la phase 2 qui n'y figurent pas encore (sans toucher au reste) */
+function autoImportPrio(){
+  const rows=stats().filter(r=>r.prio),wasEmpty=!S.tree.nodes.length;let c=0;
+  rows.forEach(r=>{
+    if(S.tree.nodes.some(n=>n.pid===r.p.id)||S.noImp[r.p.id])return;
+    const same=S.tree.nodes.find(n=>n.type==='problem'&&!n.pid&&n.text.trim().toLowerCase()===r.p.t.trim().toLowerCase());
+    if(same){same.pid=r.p.id;return}
+    const mx=S.tree.nodes.reduce((m,n)=>Math.max(m,n.x),-200);
+    addNode('problem',r.p.t,wasEmpty?60+c*200:mx+220,300,r.p.id);c++});
+  if(c){if(wasEmpty)autoLayout();save()}
+  return c}
+function importPrio(){stats().filter(r=>r.prio).forEach(r=>{delete S.noImp[r.p.id]});autoImportPrio();save();render()}
 function ph3(){
-  if(!S.tree.nodes.length&&stats().some(r=>r.prio)){stats().filter(r=>r.prio).forEach((r,c)=>{S.tree.nodes.push({id:uid(),type:'problem',text:r.p.t,x:60+c*200,y:300,pid:r.p.id})});autoLayout();persist()}
+  autoImportPrio();
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
   if(!pbs.find(n=>n.id===selPb))selPb=pbs.length?pbs[0].id:null;
   const pb=nodeOf(selPb);
@@ -275,6 +282,7 @@ function ph3(){
   return`<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
    <div class="tabs"><button class="${p3m==='why'?'on':''}" onclick="p3m='why';render()">5 Pourquoi</button><button class="${p3m==='ishi'?'on':''}" onclick="p3m='ishi';render()">Ishikawa (6M)</button></div>${helper}</aside>
   <section class="card"><h2>Arbre à problèmes</h2>
+   <p class="sm">Problèmes prioritaires de la phase 2 : ${(()=>{const pr=stats().filter(r=>r.prio);return pr.map(r=>{const ok=S.tree.nodes.some(n=>n.pid===r.p.id);return`<span class="pill ${ok?'g':'o'}" title="${esc(r.p.t)}">P${r.i+1} ${ok?'✓ dans l’arbre':'absent'}</span>`}).join(' ')||'<span class="mut">aucun</span>'})()}</p>
    <p class="sm mut"><span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas. Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d'un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l'étiquette pour changer le type.</p>
    <div class="bar"><button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="importPrio()">Importer les problèmes prioritaires</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
    <div id="cv"><div id="stage"><svg id="ed"></svg>${S.tree.nodes.map(nodeHTML).join('')}</div></div></section></div>`;
@@ -303,7 +311,7 @@ function initTree(){
     if(a==='type'){n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
     else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);save();render();focusNode(c.id)}
     else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);save();render();focusNode(c.id)}
-    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
+    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){if(n.pid)S.noImp[n.pid]=1;S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
   };
   st.oninput=e=>{const t=e.target.closest('[data-act="txt"]');if(!t)return;const n=nodeOf(t.closest('.tn').dataset.id);n.text=t.innerText.replace(/\s+/g,' ').trim();drawEdges()};
   st.onfocusout=e=>{if(e.target.closest&&e.target.closest('[data-act="txt"]'))save()};
@@ -325,7 +333,7 @@ function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.d
       if(ensureEdge(id,to)){save();drawEdges()}}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
 function addFree(type){const cv=$('#cv');const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',cv.scrollLeft+40,cv.scrollTop+40);save();render();focusNode(n.id)}
-function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>tomb(n.id));S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};S.map={};save();render()}}
+function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>{tomb(n.id);if(n.pid)S.noImp[n.pid]=1});S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};S.map={};save();render()}}
 function autoLayout(){
   const N=S.tree.nodes,E=S.tree.edges;if(!N.length)return;
   const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{if(adj[e.from]&&adj[e.to]){adj[e.from].push(e.to);adj[e.to].push(e.from)}});
@@ -559,7 +567,7 @@ function mergeState(L,R){
   M.tree.edges=union(R.tree.edges,L.tree.edges,e=>e.from+'>'+e.to).filter(e=>nid.has(e.from)&&nid.has(e.to)&&!dead('e:'+e.from+'>'+e.to));
   M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
-  ['whys','ishi','map','obj','pdca'].forEach(k=>{M[k]=dict(R[k],L[k])});
+  ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   return M}
 const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
 let dragging=false,syncing=false;
