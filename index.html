@@ -175,6 +175,7 @@ const PH=[['Phase 1','QQOQCCP · Brainstorming'],['Phase 2','Pareto · Croisemen
 const PHF=[ph1,ph2,ph3,ph4,ph5];
 function go(n){P=n;try{localStorage.setItem('pbs_phase',n)}catch(e){}render()}
 function render(){
+  {let n=0;withMain(()=>{n=dedupeState(S)});if(n){if(DD[selPb])selPb=DD[selPb];if(DD[mainPb])mainPb=DD[mainPb];save();setStatus(n+' doublon(s) de problème regroupé(s)','ok')}}
   if(P!==3){VS=null;HID=new Set()}
   if(P===3){if(ACT&&!SW)reswap()}else unswap();
   $('#steps').innerHTML=PH.map((p,i)=>`<button class="${P===i+1?'on':''}" onclick="go(${i+1})"><b>${p[0]}</b>${p[1]}</button>`).join('');
@@ -280,7 +281,7 @@ function ph2(){
 /* ---------- Phase 3 : Arbre à problèmes ---------- */
 const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Management"];
 function freeSpot(x,y){let g=0;while(vnodes().some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
-function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
+function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);let id=uid();if(pid&&type==='problem'){id='n'+pid;let g=0;while(S.tomb[id]||S.tree.nodes.some(m=>m.id===id))id='n'+pid+'~'+(++g)}const n={id,type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
 function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});if(FOLD.delete('c:'+to)|FOLD.delete('e:'+from))foldSave();return true}
 /* ---- Liste dynamique : problèmes prioritaires ↔ arbre ---- */
 const isPrio=pid=>stats().some(r=>r.p.id===pid&&r.prio);
@@ -959,6 +960,27 @@ async function testLink(){
   if(okw)add(true,'Affichage dans l’outil','Ces données sont chargées automatiquement à l’ouverture puis dès qu’un autre acteur enregistre (contrôle toutes les 15 s) ; les problèmes des autres acteurs apparaissent dans le bloc « autres acteurs » de la phase 1. Dans le Sheet, ouvrez les onglets <code>1_QQOQCCP</code>, <code>2_Matrice</code>, <code>2_Pareto</code>, <code>3_Arbre</code>… (l’onglet <code>_DATA</code> est la sauvegarde technique).')}
 async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("l'URL n'a pas répondu comme le script. Vérifiez qu'il s'agit de l'URL de l'application web (…/exec), que l'accès est réglé sur « Tous » et que la dernière version est déployée.")}}
 
+/* Doublons : plusieurs nœuds « problème » qui représentent le même problème (même problème de la phase 2)
+   sont regroupés en un seul ; leurs liens, analyses (5 pourquoi, Ishikawa, objectifs) sont rattachés au nœud conservé (le plus petit identifiant,
+   donc le même choix chez tous les acteurs) et les autres sont supprimés pour tous. */
+let DD={};
+function dedupeState(s){
+  const T=s.tree,groups={};let removed=0;
+  T.nodes.filter(n=>n.type==='problem').forEach(n=>{if(!n.pid)return;const k='p:'+n.pid;(groups[k]=groups[k]||[]).push(n)});
+  Object.values(groups).forEach(g=>{
+    if(g.length<2)return;g.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);const keep=g[0];
+    g.slice(1).forEach(d=>{
+      if(!keep.pid&&d.pid)keep.pid=d.pid;
+      const old=T.edges.filter(e=>e.from===d.id||e.to===d.id);
+      old.forEach(e=>{s.tomb['e:'+e.from+'>'+e.to]=Date.now()});
+      const seen=new Set(),out=[];
+      T.edges.forEach(e=>{const f=e.from===d.id?keep.id:e.from,t=e.to===d.id?keep.id:e.to;if(f===t)return;const k=f+'>'+t;if(seen.has(k))return;seen.add(k);out.push({from:f,to:t});delete s.tomb['e:'+k]});
+      T.edges=out;
+      T.nodes.forEach(n=>{if(n.pb===d.id)n.pb=keep.id});
+      ['whys','ishi','obj'].forEach(k=>{const D=s[k]||{};if(D[d.id]!==undefined){const cur=D[keep.id];const empty=cur===undefined||(Array.isArray(cur)&&!cur.some(Boolean))||(cur&&typeof cur==='object'&&!Array.isArray(cur)&&!Object.values(cur).some(v=>v&&(v.t||v)));if(empty)D[keep.id]=D[d.id]}});
+      Object.keys(s.map||{}).forEach(k=>{[['w:'+d.id+':','w:'+keep.id+':'],['i:'+d.id+':','i:'+keep.id+':']].forEach(([a,b])=>{if(k.startsWith(a)){const nk=b+k.slice(a.length);if(s.map[nk]===undefined)s.map[nk]=s.map[k]}})});
+      T.nodes=T.nodes.filter(n=>n.id!==d.id);s.tomb[d.id]=Date.now();DD[d.id]=keep.id;removed++})});
+  return removed}
 /* Fusion de deux états : union des enregistrements par identifiant, suppressions propagées (tomb), le plus récent l'emporte en cas de conflit */
 function mergeState(L,R){
   const lw=(L.updated||0)>=(R.updated||0),M=blank();
@@ -988,6 +1010,7 @@ function mergeState(L,R){
   M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
+  dedupeState(M);
   return M}
 const sigOf=s=>JSON.stringify([s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
 const sig=()=>sigOf(S);
@@ -995,7 +1018,7 @@ let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
 /* Synchronisation : écriture directe (sans lecture préalable) quand personne d'autre n'a écrit, sinon lecture + fusion + nouvel envoi.
    Les onglets lisibles du Sheet sont envoyés à part, seulement s'ils ont changé, après un court délai. */
-let KNOWN=null,again=false,LT={},TINL=false,NOREV=false,tablesT=null,tick=0;
+let HASREV=false,KNOWN=null,again=false,LT={},TINL=false,NOREV=false,tablesT=null,tick=0;
 function changedTables(){let T;withMain(()=>{T=buildTables()});const o={};Object.keys(T).forEach(k=>{if(LT[k]!==JSON.stringify(T[k]))o[k]=T[k]});return o}
 function markTables(o){Object.keys(o).forEach(k=>{LT[k]=JSON.stringify(o[k])})}
 const postOpt=body=>({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body});
@@ -1018,16 +1041,16 @@ async function syncNow(silent,fast){
         const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));
         if(!r.ok)throw new Error(r.error||'réponse invalide');
         withMain(()=>{const before=sig();let rs=null;if(r.state){const R=normalize(r.state);rs=sigOf(R);S=mergeState(S,R)}changed=before!==sig();upToDate=rs!==null&&sig()===rs});
-        KNOWN=r.rev||0}
+        KNOWN=r.rev||0;if(r.rev!==undefined)HASREV=true}
       if(upToDate&&!fast){skipped=true}
       let body,tb=null;
       if(!skipped){withMain(()=>{tb=TINL?changedTables():null;body=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:KNOWN,state:S,tables:tb||undefined})});
         PEND=false;
         const res=await readJSON(await fetch(url,postOpt(body)));
         if(!res.ok){if(!res.conflict){PEND=true;throw new Error(res.error||'erreur')}needLoad=true;continue}
-        KNOWN=res.rev;if(tb)markTables(tb)}
+        if(res.rev!==undefined){KNOWN=res.rev;HASREV=true}if(tb)markTables(tb)}
       persist();const hm=new Date().toLocaleTimeString('fr-FR');
-      setStatus((skipped?'À jour à ':fast&&!changed?'Enregistré à ':'Synchronisé à ')+hm+' · version '+KNOWN+' · '+S.problems.length+' problème(s)'+(changed?' · données reçues des autres acteurs':''),'ok');
+      setStatus((skipped?'À jour à ':fast&&!changed?'Enregistré à ':'Synchronisé à ')+hm+(HASREV?' · version '+KNOWN:'')+' · '+S.problems.length+' problème(s)'+(changed?' · données reçues des autres acteurs':''),'ok');
       if(changed)refreshView();
       if(!TINL){if(fast)queueTables();else sendTables()}
       return}
