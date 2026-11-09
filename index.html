@@ -13,7 +13,8 @@ header h1{font-size:16px;margin:0;font-weight:650}
 header input.ti{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;min-width:200px}
 header .sp{flex:1}
 #status{font-size:12px;opacity:.9}
-#status.ok{color:#86efac}#status.bad{color:#fca5a5}
+#status.ok{color:#86efac}#status.bad{color:#fca5a5;text-decoration:underline dotted;cursor:pointer}
+.dg li{list-style:none;margin:6px 0;padding:6px 8px;border-radius:8px;background:#f8fafc;border:1px solid var(--line)}.dg li.ok{border-color:#86efac;background:#f0fdf4}.dg li.ko{border-color:#fca5a5;background:#fef2f2}.dg ul{padding:0;margin:8px 0}.dg code{background:#e5e7eb;border-radius:4px;padding:0 4px}
 .hb{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:5px 10px;cursor:pointer;font-size:13px}
 .hb:hover{background:rgba(255,255,255,.25)}
 nav#steps{display:flex;gap:6px;padding:10px 18px;background:#fff;border-bottom:1px solid var(--line);overflow-x:auto}
@@ -112,8 +113,9 @@ details summary{cursor:pointer;font-weight:600}
   <h1>Technique de résolution des problèmes</h1>
   <input class="ti" id="ptitle" placeholder="Titre de l'analyse" onchange="S.title=this.value;save()">
   <span class="sp"></span>
-  <span id="status"></span>
+  <span id="status" onclick="if(this.className==='bad')testLink()" title="Cliquez sur un message d’échec pour lancer le diagnostic"></span>
   <button class="hb" onclick="syncNow(false)" title="Reçoit les saisies des autres acteurs, fusionne, puis envoie les vôtres">⟳ Synchroniser</button>
+  <button class="hb" onclick="testLink()" title="Vérifie la lecture et l’écriture dans le Google Sheet et affiche ce qui y est enregistré">☁ Tester la liaison</button>
   <button class="hb" onclick="openCfg()">⚙ Paramètres</button>
   <button class="hb" onclick="exportJSON()">Exporter JSON</button>
   <button class="hb" onclick="$('#jsonIn').click()">Importer JSON</button>
@@ -122,18 +124,23 @@ details summary{cursor:pointer;font-weight:600}
 <nav id="steps"></nav>
 <main id="view"></main>
 
+<dialog id="diag" class="dg">
+  <h2>Liaison avec le Google Sheet</h2>
+  <ul id="dgList"></ul>
+  <div class="bar"><button class="btn pri" onclick="testLink()">Relancer le test</button><a class="btn" id="dgSheet" target="_blank" rel="noopener">Ouvrir le Google Sheet</a><button class="btn" onclick="$('#diag').close()">Fermer</button></div>
+</dialog>
 <dialog id="cfg">
   <h2>Paramètres de partage</h2>
   <p class="mut sm">Les saisies de tous les acteurs sont <b>fusionnées</b> dans un tableau partagé : chacun voit les problèmes des autres. Le Sheet contient un onglet technique <code>_DATA</code> (sauvegarde complète) et un onglet lisible par phase.</p>
   <label>Votre nom ou structure (affiché à côté des problèmes que vous saisissez)</label>
   <input id="cfgAuthor" placeholder="Ex. : DRSP Analamanga">
-  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Synchronisation automatique (envoi 5 s après une modification, réception toutes les 45 s)</label>
+  <label><input type="checkbox" id="cfgAuto" style="width:auto"> Synchronisation automatique (envoi 1 s après une modification, réception en quelques secondes)</label>
   <details style="margin-top:10px"><summary class="sm">Paramètres avancés (administrateur)</summary>
   <label>URL de l'application web Apps Script (…/exec)</label>
   <input id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec">
   <label>Jeton (facultatif, identique à la constante TOKEN du script)</label>
   <input id="cfgTok" placeholder="">
-  <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a></p></details>
+  <p class="sm"><a id="sheetLink" target="_blank" rel="noopener">Ouvrir le Google Sheet</a> · <a href="#" onclick="$('#cfg').close();testLink();return false">Tester la liaison</a></p></details>
   <div class="bar"><button class="btn pri" onclick="saveCfg()">Enregistrer</button><button class="btn" onclick="$('#cfg').close()">Fermer</button></div>
 </dialog>
 
@@ -157,7 +164,8 @@ const cfg={get:k=>{let v='';try{v=localStorage.getItem('pbs_'+k)||''}catch(e){}r
 let autoT=null;
 function tomb(id){S.tomb[id]=Date.now()}
 function persist(){const s=SW;unswap();try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}if(s)reswap()}
-function save(){S.updated=Date.now();persist();if(cfg.get('auto')!=='0'&&cfg.get('url')){clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true),5000)}}
+let PEND=false;
+function save(){S.updated=Date.now();persist();if(cfg.get('auto')!=='0'&&cfg.get('url')){PEND=true;clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true,true),1000)}}
 function setStatus(m,k){const s=$('#status');s.textContent=m;s.className=k||''}
 const nodeOf=id=>S.tree.nodes.find(n=>n.id===id);
 const emptyMsg=t=>`<div class="card"><p class="mut">${t}</p></div>`;
@@ -379,7 +387,7 @@ function ph3(){
    ${viewNote()}
    ${repBar()}${repn()==='f'?fishView():treeUI()}</section></div>`;
 }
-function treeUI(){return`   <div class="bar">${treeHelp()}<span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span>${SW?'':'<button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button>'}<button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><button class="btn sm" onclick="foldAll(true)" title="Replie toutes les branches de la vue">⊟ Tout replier</button><button class="btn sm" onclick="foldAll(false)" title="Déplie toutes les branches">⊞ Tout déplier</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
+function treeUI(){return`   <div class="bar">${treeHelp()}<span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span>${SW?'':'<button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button>'}<button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><button class="btn sm" onclick="foldAll(true)" title="Replie toutes les branches de la vue">⊟ Tout replier</button><button class="btn sm" onclick="foldAll(false)" title="Déplie toutes les branches">⊞ Tout déplier</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadTree()" title="Télécharge l’arbre affiché (avec les branches repliées) en image SVG">Télécharger l’image (SVG)</button><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
    <div id="cv"><div id="stage" class="or-${orient()}"><svg id="ed"></svg>${vnodes().map(nodeHTML).join('')}</div></div>`}
 /* Lecture de l'arbre : verticale (effets en haut, causes en bas) ou horizontale (causes à gauche, effets à droite).
    C'est une simple vue propre à chaque utilisateur : les positions enregistrées ne changent pas. */
@@ -603,6 +611,33 @@ function fishView(){
   return`<div class="bar"><label style="margin:0">Problème</label><select style="width:auto;max-width:440px" onchange="selPb=this.value;fishPb=this.value;render()">${pbs.map(n=>`<option value="${n.id}" ${n.id===fishPb?'selected':''}>${esc(n.text.slice(0,70))}</option>`).join('')}</select><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadFish()">Télécharger l’image (SVG)</button></div>
   <p class="sm mut">Vue en lecture seule construite à partir de l’arbre : les causes directes du problème forment les arêtes principales (regroupées par famille 6M lorsqu’elles viennent de l’outil Ishikawa), et leurs sous-causes figurent le long de chaque arête. Pour modifier, repassez en « Arbre à problèmes ».</p>
   <div style="overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff">${svg}</div>`}
+/* ---- Export de l'arbre affiché en image SVG ---- */
+function treeSVG(){
+  const V=vnodes();if(!V.length)return'';
+  const W=176,LH=16,CPL=24,wrap=s=>{const o=[''];String(s||'').split(/\s+/).forEach(w=>{const c=o[o.length-1];if(c&&(c+' '+w).length>CPL)o.push(w);else o[o.length-1]=c?c+' '+w:w});return o};
+  const col={problem:['#dc2626','#fee2e2','#7f1d1d','Problème'],cause:['#ea580c','#ffedd5','#7c2d12','Cause'],effect:['#2563eb','#dbeafe','#1e3a8a','Effet']};
+  const B={};V.forEach(n=>{const[l,t]=disp(n),ln=wrap(n.text),hh=Math.max(34,ln.length*LH+12)+22;B[n.id]={n,l,t,h:hh,ln}});
+  const pad=30,head=34;let mx=0,my=0;Object.values(B).forEach(b=>{mx=Math.max(mx,b.l+W);my=Math.max(my,b.t+b.h)});
+  const minl=Math.min(...Object.values(B).map(b=>b.l)),mint=Math.min(...Object.values(B).map(b=>b.t));
+  const ox=pad-minl,oy=pad+head-mint,Wd=mx-minl+pad*2,Hd=my-mint+pad*2+head;
+  const pb=VS&&nodeOf(selPb)?nodeOf(selPb).text:(S.title||'Arbre à problèmes');
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wd} ${Hd}" width="${Wd}" height="${Hd}" font-family="system-ui,Segoe UI,sans-serif"><defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs><rect width="${Wd}" height="${Hd}" fill="#fff"/>`;
+  s+=`<text x="${pad}" y="${pad+8}" font-size="15" font-weight="700" fill="#12343b">Arbre à problèmes — ${esc(pb.length>90?pb.slice(0,89)+'…':pb)}</text>`;
+  S.tree.edges.forEach(e=>{const a=B[e.from],b=B[e.to];if(!a||!b)return;
+    const ax=a.l+ox,ay=a.t+oy,bx=b.l+ox,by=b.t+oy;let d;
+    if(orient()==='h'){const y1=ay+a.h/2,y2=by+b.h/2;let x1,x2;if(ax<=bx){x1=ax+W;x2=bx}else{x1=ax;x2=bx+W}const xm=(x1+x2)/2;d=`M${x1} ${y1} C${xm} ${y1} ${xm} ${y2} ${x2} ${y2}`}
+    else{const x1=ax+W/2,x2=bx+W/2;let y1,y2;if(ay>=by){y1=ay;y2=by+b.h}else{y1=ay+a.h;y2=by}const ym=(y1+y2)/2;d=`M${x1} ${y1} C${x1} ${ym} ${x2} ${ym} ${x2} ${y2}`}
+    s+=`<path d="${d}" fill="none" stroke="#6b7280" stroke-width="1.6" marker-end="url(#ah)"/>`});
+  Object.values(B).forEach(b=>{const c=col[b.n.type]||col.cause,x=b.l+ox,y=b.t+oy;
+    s+=`<rect x="${x}" y="${y}" width="${W}" height="${b.h}" rx="8" fill="#fff" stroke="${c[0]}" stroke-width="2"/><path d="M${x} ${y+22}V${y+8}a8 8 0 0 1 8-8H${x+W-8}a8 8 0 0 1 8 8V${y+22}z" fill="${c[1]}"/><text x="${x+8}" y="${y+15}" font-size="11" font-weight="700" fill="${c[2]}">${c[3]}</text>`;
+    b.ln.forEach((t,i)=>{s+=`<text x="${x+8}" y="${y+22+8+(i+1)*LH-4}" font-size="12.5" fill="#1f2937">${esc(t)}</text>`});
+    foldDirs(b.n).forEach(d=>{const k=d+':'+b.n.id;if(FOLD.has(k)){const c2=collect(b.n.id,d).length;const cx=orient()==='h'?(d==='c'?x:x+W):x+W/2,cy=orient()==='h'?y+b.h/2:(d==='c'?y+b.h:y);
+      s+=`<rect x="${cx-16}" y="${cy-8}" width="32" height="16" rx="8" fill="#fef3c7" stroke="#f59e0b"/><text x="${cx}" y="${cy+4}" font-size="10.5" font-weight="700" text-anchor="middle" fill="#78350f">+${c2}</text>`}})});
+  return s+'</svg>'}
+function downloadTree(){
+  const svg=treeSVG();if(!svg){alert('Rien à exporter : la vue est vide.');return}
+  const pb=VS&&nodeOf(selPb)?nodeOf(selPb).text:(S.title||'arbre');
+  download('arbre_'+pb.replace(/[^\w]+/g,'_').slice(0,40)+'.svg',svg,'image/svg+xml')}
 function downloadFish(){const pb=nodeOf(fishPb);if(!pb)return;download('ishikawa_'+(pb.text||'probleme').replace(/[^\w]+/g,'_').slice(0,40)+'.svg',fishDiagram(pb.text,fishBones(fishPb),collect(fishPb,'e').map(x=>x.n.text)),'image/svg+xml')}
 function nodeHTML(n){const lab={problem:'Problème',cause:'Cause',effect:'Effet'}[n.type];
   return`<div class="tn ${n.type}${selN.has(n.id)?' sel':''}${orient()==='v'&&hasFoldC(n)?' hc':''}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div>${foldRow(n)}</div>`}
@@ -888,6 +923,40 @@ function buildTables(){
   return T}
 function openCfg(){$('#cfgAuthor').value=cfg.get('author');$('#cfgUrl').value=cfg.get('url');$('#cfgTok').value=cfg.get('token');$('#cfgAuto').checked=cfg.get('auto')!=='0';$('#sheetLink').href=SHEET_URL;$('#cfg').showModal()}
 function saveCfg(){cfg.set('author',$('#cfgAuthor').value.trim());{const u=$('#cfgUrl').value.trim(),t=$('#cfgTok').value.trim();cfg.set('url',u===DEFAULTS.url?'':u);cfg.set('token',t===DEFAULTS.token?'':t)}cfg.set('auto',$('#cfgAuto').checked?'1':'0');$('#cfg').close();if(cfg.get('url'))syncNow(false);else setStatus('Liaison enregistrée','ok')}
+let LASTREV=null;
+function niceErr(e){const m=String((e&&e.message)||e);
+  if(/Failed to fetch|NetworkError|Load failed/i.test(m))return'impossible de joindre le script (connexion Internet, URL incorrecte, ou déploiement non accessible à « Tous »)';
+  return m}
+async function testLink(){
+  const L=$('#dgList'),url=cfg.get('url'),items=[];$('#dgSheet').href=SHEET_URL;
+  const paint=()=>{L.innerHTML=items.map(i=>`<li class="${i.ok===null?'':i.ok?'ok':'ko'}"><b>${i.ok===null?'…':i.ok?'✔':'✖'} ${esc(i.t)}</b>${i.d?`<div class="sm" style="margin-top:3px">${i.d}</div>`:''}</li>`).join('')};
+  const add=(ok,t,d)=>{items.push({ok,t,d});paint();return items.length-1};
+  const upd=(k,ok,t,d)=>{items[k]={ok,t,d};paint()};
+  if(!$('#diag').open)$('#diag').showModal();
+  if(!url){add(false,'Aucune URL de script enregistrée','Ouvrez ⚙ Paramètres > Paramètres avancés et collez l’URL de l’application web (se terminant par <code>/exec</code>).');return}
+  add(true,'URL du script enregistrée','<code>'+esc(url.slice(0,60))+'…</code>');
+  const tok=encodeURIComponent(cfg.get('token')),sep=url.includes('?')?'&':'?';
+  let k=add(null,'Lecture du Sheet (envoi d’une demande au script)…');let r,txt;
+  try{const resp=await fetch(url+sep+'action=load&token='+tok);txt=await resp.text()}
+  catch(e){upd(k,false,'Le script est injoignable','Le navigateur n’a pas pu contacter l’URL. Vérifiez : (1) qu’il s’agit bien de l’URL de l’<b>application web</b> (…/exec) et non de celle du Sheet ; (2) dans Apps Script : <i>Déployer › Gérer les déploiements › Modifier</i> : « Exécuter en tant que : Moi » et « Qui a accès : <b>Tous</b> » ; (3) votre connexion Internet.');return}
+  try{r=JSON.parse(txt)}catch(e){
+    let d='La réponse n’est pas celle du script. ';
+    if(/doGet/.test(txt))d+='Le script déployé <b>ne contient pas la fonction <code>doGet</code></b> : collez le fichier <code>Code.gs</code> fourni dans Apps Script, enregistrez, puis <i>Déployer › Gérer les déploiements › Modifier › Version : Nouvelle version › Déployer</i>.';
+    else if(/accounts\.google|Sign in|Connexion|autorisation|Authorization/i.test(txt))d+='Le déploiement demande une connexion Google : réglez « Qui a accès » sur <b>Tous</b>, puis redéployez une nouvelle version.';
+    else d+='Vérifiez que l’URL est bien celle de l’application web (…/exec) et que la <b>dernière version</b> est déployée.';
+    upd(k,false,'Réponse inattendue du script',d);return}
+  if(!r.ok){upd(k,false,'Le script répond par une erreur','<code>'+esc(r.error||JSON.stringify(r).slice(0,200))+'</code>'+(/jeton/i.test(r.error||'')?' — le jeton saisi dans Paramètres avancés ne correspond pas à <code>TOKEN</code> dans le script.':/permission|autoris|access/i.test(r.error||'')?' — ouvrez Apps Script, exécutez une fois la fonction <code>doGet</code> pour autoriser l’accès au Sheet.':''));return}
+  if(!('rev' in r)){upd(k,false,'Ancienne version du script déployée','Le script répond, mais il ne gère pas la synchronisation multi-acteurs. Collez la dernière version de <code>Code.gs</code> dans Apps Script puis <i>Déployer › Gérer les déploiements › Modifier › Nouvelle version</i>.');return}
+  const sum=s=>{if(!s)return'<i>vide : rien n’a encore été enregistré</i>';const by={};(s.problems||[]).forEach(p=>{const a=p.by||'(sans nom)';by[a]=(by[a]||0)+1});
+    return`${(s.problems||[]).length} problème(s)${Object.keys(by).length?' — '+Object.keys(by).map(a=>esc(a)+' : '+by[a]).join(', '):''} · arbre : ${((s.tree||{}).nodes||[]).length} nœud(s) · ${(s.actions||[]).length} action(s) · ${(s.logframe||[]).length} ligne(s) de cadre logique`};
+  upd(k,true,'Lecture réussie — version '+r.rev+' du Sheet','Contenu enregistré dans le Sheet : '+sum(r.state));
+  k=add(null,'Écriture : envoi de vos données au Sheet…');
+  syncing=false;await syncNow(true);
+  if($('#status').className!=='ok'){upd(k,false,'L’écriture a échoué',esc($('#status').textContent));return}
+  let r2;try{r2=JSON.parse(await(await fetch(url+sep+'action=load&token='+tok)).text())}catch(e){upd(k,false,'Écriture envoyée mais relecture impossible',esc(niceErr(e)));return}
+  const okw=r2&&r2.ok&&r2.rev>r.rev;
+  upd(k,okw,okw?'Écriture confirmée — version '+r2.rev:'Écriture non confirmée','Après envoi, le Sheet contient : '+sum(r2.state)+(okw?'':'<br>La version n’a pas augmenté : vérifiez que le déploiement est à jour.'));
+  if(okw)add(true,'Affichage dans l’outil','Ces données sont chargées automatiquement à l’ouverture puis dès qu’un autre acteur enregistre (contrôle toutes les 15 s) ; les problèmes des autres acteurs apparaissent dans le bloc « autres acteurs » de la phase 1. Dans le Sheet, ouvrez les onglets <code>1_QQOQCCP</code>, <code>2_Matrice</code>, <code>2_Pareto</code>, <code>3_Arbre</code>… (l’onglet <code>_DATA</code> est la sauvegarde technique).')}
 async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("l'URL n'a pas répondu comme le script. Vérifiez qu'il s'agit de l'URL de l'application web (…/exec), que l'accès est réglé sur « Tous » et que la dernière version est déployée.")}}
 
 /* Fusion de deux états : union des enregistrements par identifiant, suppressions propagées (tomb), le plus récent l'emporte en cas de conflit */
@@ -920,30 +989,64 @@ function mergeState(L,R){
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   return M}
-const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.parked,S.keep,S.noImp,S.cartes,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
+const sigOf=s=>JSON.stringify([s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
+const sig=()=>sigOf(S);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
-async function syncNow(silent){
+/* Synchronisation : écriture directe (sans lecture préalable) quand personne d'autre n'a écrit, sinon lecture + fusion + nouvel envoi.
+   Les onglets lisibles du Sheet sont envoyés à part, seulement s'ils ont changé, après un court délai. */
+let KNOWN=null,again=false,LT={},TINL=false,NOREV=false,tablesT=null,tick=0;
+function changedTables(){let T;withMain(()=>{T=buildTables()});const o={};Object.keys(T).forEach(k=>{if(LT[k]!==JSON.stringify(T[k]))o[k]=T[k]});return o}
+function markTables(o){Object.keys(o).forEach(k=>{LT[k]=JSON.stringify(o[k])})}
+const postOpt=body=>({method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body});
+async function sendTables(){
+  const url=cfg.get('url');if(!url||TINL)return;const o=changedTables();if(!Object.keys(o).length)return;
+  try{const res=await readJSON(await fetch(url,postOpt(JSON.stringify({action:'tables',token:cfg.get('token'),tables:o}))));
+    if(res.ok)markTables(o);else if(/inconnue/i.test(res.error||''))TINL=true}catch(e){}}
+function queueTables(){clearTimeout(tablesT);tablesT=setTimeout(sendTables,12000)}
+async function syncNow(silent,fast){
   const url=cfg.get('url');if(!url){if(!silent)openCfg();return}
-  if(syncing||dragging)return;syncing=true;if(!silent)setStatus('Synchronisation…');
+  if(dragging){setTimeout(()=>syncNow(silent,fast),600);return}
+  if(syncing){again=true;return}
+  syncing=true;if(!silent)setStatus('Synchronisation…');else if(fast)setStatus('Enregistrement…');
   const tok=encodeURIComponent(cfg.get('token')),sep=url.includes('?')?'&':'?';
   try{
+    let needLoad=!(fast&&KNOWN!==null),skipped=false;
     for(let t=0;t<4;t++){
-      const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));
-      if(!r.ok)throw new Error(r.error||'réponse invalide');
-      let changed=false,body='';
-      withMain(()=>{const before=sig();if(r.state)S=mergeState(S,normalize(r.state));changed=before!==sig();body=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:r.rev||0,state:S,tables:buildTables()})});
-      const res=await readJSON(await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body}));
-      if(res.ok){persist();setStatus('Synchronisé à '+new Date().toLocaleTimeString('fr-FR'),'ok');if(changed)refreshView();return}
-      if(!res.conflict)throw new Error(res.error||'erreur');
-    }
+      let changed=false,upToDate=false;
+      if(needLoad){
+        const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));
+        if(!r.ok)throw new Error(r.error||'réponse invalide');
+        withMain(()=>{const before=sig();let rs=null;if(r.state){const R=normalize(r.state);rs=sigOf(R);S=mergeState(S,R)}changed=before!==sig();upToDate=rs!==null&&sig()===rs});
+        KNOWN=r.rev||0}
+      if(upToDate&&!fast){skipped=true}
+      let body,tb=null;
+      if(!skipped){withMain(()=>{tb=TINL?changedTables():null;body=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:KNOWN,state:S,tables:tb||undefined})});
+        PEND=false;
+        const res=await readJSON(await fetch(url,postOpt(body)));
+        if(!res.ok){if(!res.conflict){PEND=true;throw new Error(res.error||'erreur')}needLoad=true;continue}
+        KNOWN=res.rev;if(tb)markTables(tb)}
+      persist();const hm=new Date().toLocaleTimeString('fr-FR');
+      setStatus((skipped?'À jour à ':fast&&!changed?'Enregistré à ':'Synchronisé à ')+hm+' · version '+KNOWN+' · '+S.problems.length+' problème(s)'+(changed?' · données reçues des autres acteurs':''),'ok');
+      if(changed)refreshView();
+      if(!TINL){if(fast)queueTables();else sendTables()}
+      return}
     throw new Error('conflits répétés, réessayez')
-  }catch(e){setStatus('Échec de la synchronisation : '+e.message,'bad')}finally{syncing=false}}
-setInterval(()=>{if(cfg.get('url')&&cfg.get('auto')!=='0')syncNow(true)},45000);
+  }catch(e){PEND=true;setStatus('Échec de la synchronisation : '+niceErr(e)+' (cliquez pour diagnostiquer)','bad')}
+  finally{syncing=false;if(again){again=false;setTimeout(()=>syncNow(true,true),200)}}}
+/* Réception : on interroge seulement le numéro de version (très rapide) toutes les 15 s, et on ne charge les données que s'il a changé */
+setInterval(async()=>{
+  const url=cfg.get('url');if(!url||cfg.get('auto')==='0'||document.hidden||syncing)return;tick++;
+  if(NOREV||KNOWN===null){if(KNOWN===null||tick%3===0)syncNow(true);return}
+  try{const sep=url.includes('?')?'&':'?',r=await readJSON(await fetch(url+sep+'action=rev&token='+encodeURIComponent(cfg.get('token'))));
+    if(r&&r.ok&&'rev' in r){if(r.rev!==KNOWN)syncNow(true);else if(PEND)syncNow(true,true)}else{NOREV=true;syncNow(true)}}catch(e){}},15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cfg.get('url')&&cfg.get('auto')!=='0')syncNow(true)});
+/* à la fermeture de la page : envoi de secours des dernières modifications */
+addEventListener('pagehide',()=>{if(!PEND||KNOWN===null||!cfg.get('url'))return;try{let b;withMain(()=>{b=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:KNOWN,state:S})});navigator.sendBeacon(cfg.get('url'),b)}catch(e){}});
 
 render();
 if(!cfg.get('author'))setTimeout(openCfg,400);
-if(cfg.get('url'))syncNow(true);
+if(cfg.get('url')){setStatus('Connexion au Google Sheet…');syncNow(true)}
 </script>
 </body>
 </html>
