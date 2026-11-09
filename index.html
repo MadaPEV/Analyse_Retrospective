@@ -37,6 +37,13 @@ label{display:block;font-weight:600;font-size:12px;margin:9px 0 3px}
 .pi{position:relative;border:1px solid var(--line);border-radius:8px;padding:8px 30px 8px 10px;margin:6px 0;cursor:pointer}
 .pi.on{border-color:var(--acc);background:#ecfdf5}.pi small{display:block;color:var(--mut)}
 .pi .x{position:absolute;right:6px;top:6px;border:0;background:none;cursor:pointer;color:var(--mut)}
+.ctabs{display:flex;align-items:flex-end;gap:2px;border-bottom:2px solid #12343b;margin:2px 0 8px;flex-wrap:wrap}
+.ctabs button.t{border:1px solid var(--line);border-bottom:none;background:#eef2f3;border-radius:8px 8px 0 0;padding:5px 12px;cursor:pointer;font-size:12.5px;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctabs button.t.on{background:#12343b;color:#fff;border-color:#12343b;font-weight:600}
+.ctabs .act{margin-left:auto;display:flex;gap:6px;padding-bottom:3px;flex-wrap:wrap}
+.info{position:relative;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#12343b;color:#fff;font:italic 700 13px Georgia,serif;cursor:help}
+.info .tip{display:none;position:absolute;top:26px;left:0;width:min(520px,80vw);background:#fff;color:#1f2937;border:1px solid var(--line);border-radius:8px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,.18);font:12.5px/1.5 system-ui,sans-serif;font-style:normal;font-weight:400;z-index:30;text-align:left}
+.info:hover .tip,.info:focus .tip{display:block}
 .tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
 .tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 14px;cursor:pointer}
 .tabs button.on{background:#12343b;color:#fff;border-color:#12343b}
@@ -74,6 +81,15 @@ td.diag{background:#e5e7eb}
 .oin{display:flex;gap:6px;margin-top:3px}
 .oin input{flex:1}
 .tn.sel{outline:3px solid #2563eb;outline-offset:2px}
+.tn .fd{position:absolute;min-width:16px;height:16px;padding:0 4px;border-radius:999px;border:1px solid #9ca3af;background:#fff;font:700 11px/13px system-ui,sans-serif;cursor:pointer;color:#374151;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tn .fd:hover{background:#e5e7eb}
+.tn .fd.on{background:#fef3c7;border-color:#f59e0b;color:#78350f}
+.tn .fd.c{left:50%;bottom:2px;transform:translateX(-50%)}
+.tn .fd.e{left:50%;top:-9px;transform:translateX(-50%)}
+.tn.hc{padding-bottom:17px}
+#stage.or-h .fd.c{left:-9px;top:50%;bottom:auto;transform:translateY(-50%)}
+#stage.or-h .fd.e{right:-9px;left:auto;top:50%;transform:translateY(-50%)}
+#stage.or-h .tn.hc{padding-bottom:0}
 #stage .rb{position:absolute;border:1.5px dashed #2563eb;background:rgba(37,99,235,.12);pointer-events:none;z-index:5}
 .selbar{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:6px 8px}
 .btn:disabled{opacity:.45;cursor:not-allowed}
@@ -132,7 +148,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{}}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{},cartes:{}}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
@@ -140,7 +156,7 @@ let selP=null,p3m='why',selPb=null,p4='obj',p5='lf';
 const cfg={get:k=>{let v='';try{v=localStorage.getItem('pbs_'+k)||''}catch(e){}return v||DEFAULTS[k]||''},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
 let autoT=null;
 function tomb(id){S.tomb[id]=Date.now()}
-function persist(){try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}}
+function persist(){const s=SW;unswap();try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}if(s)reswap()}
 function save(){S.updated=Date.now();persist();if(cfg.get('auto')!=='0'&&cfg.get('url')){clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true),5000)}}
 function setStatus(m,k){const s=$('#status');s.textContent=m;s.className=k||''}
 const nodeOf=id=>S.tree.nodes.find(n=>n.id===id);
@@ -151,6 +167,8 @@ const PH=[['Phase 1','QQOQCCP · Brainstorming'],['Phase 2','Pareto · Croisemen
 const PHF=[ph1,ph2,ph3,ph4,ph5];
 function go(n){P=n;try{localStorage.setItem('pbs_phase',n)}catch(e){}render()}
 function render(){
+  if(P!==3){VS=null;HID=new Set()}
+  if(P===3){if(ACT&&!SW)reswap()}else unswap();
   $('#steps').innerHTML=PH.map((p,i)=>`<button class="${P===i+1?'on':''}" onclick="go(${i+1})"><b>${p[0]}</b>${p[1]}</button>`).join('');
   $('#ptitle').value=S.title||'';
   $('#view').innerHTML=PHF[P-1]();
@@ -253,13 +271,14 @@ function ph2(){
 
 /* ---------- Phase 3 : Arbre à problèmes ---------- */
 const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Management"];
-function freeSpot(x,y){let g=0;while(S.tree.nodes.some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
+function freeSpot(x,y){let g=0;while(vnodes().some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
 function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);const n={id:uid(),type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
-function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});return true}
+function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});if(FOLD.delete('c:'+to)|FOLD.delete('e:'+from))foldSave();return true}
 /* ---- Liste dynamique : problèmes prioritaires ↔ arbre ---- */
 const isPrio=pid=>stats().some(r=>r.p.id===pid&&r.prio);
 let notice='';
 function autoImportPrio(){
+  if(SW)return;
   const rows=stats().filter(r=>r.prio),wasEmpty=!S.tree.nodes.length;let c=0;const back=[];
   rows.forEach(r=>{
     if(S.tree.nodes.some(n=>n.pid===r.p.id))return;
@@ -326,6 +345,7 @@ function restoreClick(pid){restorePark(pid);save();render()}
 function keepPb(pid){S.keep[pid]=1;save();render()}
 function delPark(pid){if(!confirm('Supprimer définitivement ce problème mis de côté et son analyse ?'))return;delete S.parked[pid];tomb('park:'+pid);save();render()}
 function p3banners(){
+  if(SW){notice='';return''}
   const nt=notice;notice='';
   const stale=S.tree.nodes.filter(n=>n.type==='problem'&&n.pid&&!S.keep[n.pid]&&!isPrio(n.pid));
   const pk=Object.keys(S.parked);
@@ -335,15 +355,17 @@ function p3banners(){
   if(pk.length)o+=`<details class="card"><summary>Problèmes mis de côté (${pk.length})</summary>${pk.map(k=>{const b=S.parked[k];return`<div class="or"><b>${pnum(k)}</b> ${esc(b.label)} <span class="mut sm">· ${b.nodes.length-1} élément(s) d'analyse · ${new Date(b.ts).toLocaleDateString('fr-FR')}${b.by?' · '+esc(b.by):''}</span> ${isPrio(k)?'<span class="pill g">redevenu prioritaire</span>':''}<div class="bar"><button class="btn sm" onclick="restoreClick('${k}')">Restaurer dans l'arbre</button><button class="btn sm bad" onclick="delPark('${k}')">Supprimer</button></div></div>`}).join('')}</details>`;
   return o}
 function ph3(){
-  autoImportPrio();calcHYM();
+  autoImportPrio();
   const banners=p3banners();
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
+  if(selPb===null&&!SW&&cfg.get('pb'))selPb=cfg.get('pb');
   if(!pbs.find(n=>n.id===selPb))selPb=pbs.length?pbs[0].id:null;
-  const pb=nodeOf(selPb);
+  if(!SW){cfg.set('pb',selPb||'');mainPb=selPb}
+  const pb=nodeOf(selPb);VS=viewSet();HID=foldHidden(baseNodes());calcHYM();
   let helper='';
   if(!pb)helper='<p class="mut">Ajoutez un nœud « Problème » dans l\'arbre (ou cliquez sur « Mettre à jour la carte » pour importer les problèmes prioritaires) pour analyser ses causes.</p>';
   else{
-    helper=`<label>Problème analysé</label><select onchange="selPb=this.value;render()">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,60))}</option>`).join('')}</select>`;
+    helper=`<label>Problème analysé <span class="mut" style="font-weight:400">· vue de la carte</span></label><select onchange="selPb=this.value;selN=new Set();render()" title="Le problème choisi ici est le seul affiché dans la carte">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,60))}</option>`).join('')}</select>`;
     if(p3m==='why'){const w=S.whys[selPb]||[];
       helper+=`<p class="sm mut">Remontez la chaîne causale : chaque réponse devient la cause de la précédente.</p>`+[0,1,2,3,4].map(i=>`<label>Pourquoi ? (${i+1}) ${i===0?'':'<span class="mut" style="font-weight:400">– pourquoi la réponse précédente ?</span>'}</label><textarea rows="2" onchange="setWhy(${i},this.value)">${esc(w[i]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendWhys()">Envoyer vers l'arbre</button></div>`;
     }else{const I=S.ishi[selPb]||{};
@@ -353,21 +375,108 @@ function ph3(){
   return`${banners}<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
    <div class="tabs"><button class="${p3m==='why'?'on':''}" onclick="p3m='why';render()">5 Pourquoi</button><button class="${p3m==='ishi'?'on':''}" onclick="p3m='ishi';render()">Ishikawa (6M)</button></div>${helper}</aside>
   <section class="card"><h2>Arbre à problèmes</h2>
-   <p class="sm">Problèmes prioritaires de la phase 2 : ${(()=>{const pr=stats().filter(r=>r.prio);return pr.map(r=>{const ok=S.tree.nodes.some(n=>n.pid===r.p.id);return`<span class="pill ${ok?'g':'o'}" title="${esc(r.p.t)}">P${r.i+1} ${ok?'✓ dans l’arbre':'absent'}</span>`}).join(' ')||'<span class="mut">aucun</span>'})()}</p>
+   ${carteBar()}
+   ${viewNote()}
    ${repBar()}${repn()==='f'?fishView():treeUI()}</section></div>`;
 }
-function treeUI(){return`   <p class="sm mut">${orient()==='h'?'<span class="tag cause">Causes</span> à gauche, <span class="tag problem">problème central</span> au milieu, <span class="tag effect">effets</span> à droite.':'<span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas.'} Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d'un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l'étiquette pour changer le type.<br><b>Sélection multiple :</b> clic sur un nœud, Maj+clic pour en ajouter, ou cadre tracé dans le vide ; Alt+clic sélectionne un nœud avec toute sa branche de causes. Glisser un nœud sélectionné déplace toute la sélection.</p>
-   <div class="bar"><span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span><button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button><button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
-   <div class="bar selbar"><b class="sm">Sélection</b><span id="selinfo" class="sm mut"></span><button class="btn sm" onclick="selAll()">Tout</button><button class="btn sm" onclick="selNone()" data-needsel>Aucune</button><button class="btn sm" onclick="selBranch('c')" data-needsel title="Ajoute à la sélection toute la branche des causes situées en amont">＋ Branche des causes</button><button class="btn sm" onclick="selBranch('e')" data-needsel title="Ajoute à la sélection toute la branche des effets situés en aval">＋ Branche des effets</button><span class="sp" style="flex:1"></span><button class="btn sm pri" onclick="copySel()" data-needsel title="Copie les nœuds sélectionnés et leurs liens (Ctrl+C)">Copier</button><button class="btn sm" onclick="pasteClip('')" data-needclip title="Colle une copie indépendante (Ctrl+V)">Coller</button><button class="btn sm" onclick="pasteClip('c')" data-needclip title="Sélectionnez un nœud cible : la branche collée devient sa cause">Coller comme causes</button><button class="btn sm" onclick="pasteClip('e')" data-needclip title="Sélectionnez un nœud cible : la branche collée devient son effet">Coller comme effets</button><span id="clipinfo" class="sm mut"></span><button class="btn sm bad" onclick="deleteSel()" data-needsel>Supprimer la sélection</button></div>
-   <div id="cv"><div id="stage"><svg id="ed"></svg>${S.tree.nodes.map(nodeHTML).join('')}</div></div>`}
+function treeUI(){return`   <div class="bar">${treeHelp()}<span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span>${SW?'':'<button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button>'}<button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><button class="btn sm" onclick="foldAll(true)" title="Replie toutes les branches de la vue">⊟ Tout replier</button><button class="btn sm" onclick="foldAll(false)" title="Déplie toutes les branches">⊞ Tout déplier</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
+   <div id="cv"><div id="stage" class="or-${orient()}"><svg id="ed"></svg>${vnodes().map(nodeHTML).join('')}</div></div>`}
 /* Lecture de l'arbre : verticale (effets en haut, causes en bas) ou horizontale (causes à gauche, effets à droite).
    C'est une simple vue propre à chaque utilisateur : les positions enregistrées ne changent pas. */
-const SX=1.8,SY=0.7;let HYM=0;
+const SX=1.8,SY=0.7;let HYM=0,OX=0,OY=0,VS=null;
+/* Carte principale : seul le problème choisi dans « Problème analysé » (avec ses causes et effets) est affiché */
+const onlyOne=()=>cfg.get('only')!=='0';
+function setOnly(v){cfg.set('only',v?'1':'0');selN=new Set();render()}
+function viewSet(){
+  if(SW||!onlyOne()||!nodeOf(selPb))return null;
+  const set=new Set([selPb]);collect(selPb,'c').forEach(x=>set.add(x.n.id));collect(selPb,'e').forEach(x=>set.add(x.n.id));
+  S.tree.nodes.forEach(n=>{if(n.pb===selPb)set.add(n.id);else if(!n.pb&&n.type!=='problem'&&!S.tree.edges.some(e=>e.from===n.id||e.to===n.id))set.add(n.id)});
+  return set}
+let FOLD=new Set((()=>{try{return JSON.parse(cfg.get('fold')||'[]')}catch(e){return[]}})()),HID=new Set();
+const vnodes=()=>S.tree.nodes.filter(n=>(!VS||VS.has(n.id))&&!HID.has(n.id));
+const baseNodes=()=>S.tree.nodes.filter(n=>!VS||VS.has(n.id));
+function foldSave(){try{cfg.set('fold',JSON.stringify([...FOLD]))}catch(e){}}
+function foldHidden(base){
+  if(!FOLD.size)return new Set();
+  const H=new Set();FOLD.forEach(k=>{const t=k[0],id=k.slice(2);if(nodeOf(id))collect(id,t).forEach(x=>H.add(x.n.id))});
+  if(!H.size)return H;
+  const baseIds=new Set(base.map(n=>n.id)),vis=new Set([...baseIds].filter(i=>!H.has(i))),q=[...vis];
+  while(q.length){const a=q.shift();S.tree.edges.forEach(e=>{
+    if(e.to===a&&!FOLD.has('c:'+a)&&H.has(e.from)&&!vis.has(e.from)){vis.add(e.from);q.push(e.from)}
+    if(e.from===a&&!FOLD.has('e:'+a)&&H.has(e.to)&&!vis.has(e.to)){vis.add(e.to);q.push(e.to)}})}
+  vis.forEach(i=>H.delete(i));return H}
+const foldDirs=n=>n.type==='problem'?['c','e']:n.type==='cause'?['c']:['e'];
+function toggleFold(id,dir){
+  const n=nodeOf(id);if(!n)return;const k=dir+':'+id;
+  if(FOLD.has(k))FOLD.delete(k);else{if(!collect(id,dir).length)return;FOLD.add(k)}
+  foldSave();const cv=$('#cv'),l=cv?cv.scrollLeft:0,t=cv?cv.scrollTop:0;render();const c2=$('#cv');if(c2){c2.scrollLeft=l;c2.scrollTop=t}}
+function foldAll(on){
+  if(on)baseNodes().forEach(n=>foldDirs(n).forEach(d=>{if(collect(n.id,d).length)FOLD.add(d+':'+n.id)}));else FOLD.clear();
+  foldSave();render()}
 const orient=()=>cfg.get('orient')==='h'?'h':'v';
-function calcHYM(){HYM=S.tree.nodes.reduce((m,n)=>Math.max(m,n.y),0)+150}
-function disp(n){return orient()==='h'?[Math.round((HYM-n.y)*SX),Math.round(n.x*SY)+20]:[n.x,n.y]}
-function fromDisp(l,t){return orient()==='h'?[Math.max(0,Math.round((t-20)/SY)),Math.max(0,Math.round(HYM-l/SX))]:[Math.max(0,Math.round(l)),Math.max(0,Math.round(t))]}
+function calcHYM(){const V=vnodes();if(VS&&V.length){OX=Math.max(0,Math.min(...V.map(n=>n.x))-40);OY=Math.max(0,Math.min(...V.map(n=>n.y))-40)}else{OX=0;OY=0}HYM=V.reduce((m,n)=>Math.max(m,n.y-OY),0)+150}
+function disp(n){const x=n.x-OX,y=n.y-OY;return orient()==='h'?[Math.round((HYM-y)*SX),Math.round(x*SY)+20]:[x,y]}
+function fromDisp(l,t){return orient()==='h'?[Math.max(0,Math.round((t-20)/SY))+OX,Math.max(0,Math.round(HYM-l/SX))+OY]:[Math.max(0,Math.round(l))+OX,Math.max(0,Math.round(t))+OY]}
 function setOrient(o){cfg.set('orient',o);render()}
+/* ---- Cartes séparées (une carte par problème prioritaire, carte consolidée, etc.) ---- */
+let ACT=cfg.get('carte')||null,SW=false,lastSnap='';
+function unswap(){
+  if(!SW)return;const c=S.cartes[ACT];
+  if(c){const a=JSON.stringify([S.tree.nodes,S.tree.edges]);if(a!==lastSnap){c.ts=Date.now();c.by=cfg.get('author')}c.nodes=S.tree.nodes;c.edges=S.tree.edges}
+  S.tree=MAINT;SW=false}
+let MAINT=null;
+function reswap(){
+  if(!ACT)return;const c=S.cartes[ACT];
+  if(!c){ACT=null;cfg.set('carte','');return}
+  MAINT=S.tree;S.tree={nodes:c.nodes,edges:c.edges};SW=true;lastSnap=JSON.stringify([c.nodes,c.edges])}
+function withMain(fn){const s=SW;unswap();try{fn()}finally{if(s)reswap()}}
+function setActive(id){ACT=id||null;cfg.set('carte',ACT||'')}
+let mainPb=null;
+function switchCarte(id){unswap();setActive(id);selN=new Set();selPb=id?null:mainPb;persist();render()}
+function carteName(c){return c?c.name:'Carte principale'}
+function newCarteObj(name,nodes,edges){const id='c'+uid();S.cartes[id]={id,name,nodes,edges,ts:Date.now(),by:cfg.get('author')};return id}
+function nextName(){let k=Object.keys(S.cartes).length+1;const names=new Set(Object.values(S.cartes).map(c=>c.name));while(names.has('Carte '+k))k++;return'Carte '+k}
+function newCarte(){
+  const nm=prompt('Nom de la nouvelle carte vierge :',nextName());if(nm===null)return;
+  unswap();const id=newCarteObj(nm.trim()||nextName(),[],[]);setActive(id);selN=new Set();selPb=null;persist();save();render();setStatus('Feuille « '+S.cartes[id].name+' » créée','ok')}
+function renameCarte(){const c=S.cartes[ACT];if(!c)return;const nm=prompt('Nouveau nom de la carte :',c.name);if(nm===null||!nm.trim())return;c.name=nm.trim();c.ts=Date.now();c.by=cfg.get('author');lastSnap=JSON.stringify([S.tree.nodes,S.tree.edges]);save();render()}
+function saveCarte(){
+  /* enregistre la carte active (ou, depuis la carte principale, en crée une copie nommée) */
+  if(SW){persist();save();setStatus('Carte « '+S.cartes[ACT].name+' » enregistrée à '+new Date().toLocaleTimeString('fr-FR'),'ok');return}
+  saveAsCarte()}
+function saveAsCarte(){
+  const nm=prompt(SW?'Enregistrer une copie de cette feuille sous le nom :':'Copier le problème affiché dans une nouvelle feuille, sous le nom :',SW?S.cartes[ACT].name+' (copie)':nextName());if(nm===null)return;
+  const vs=vnodes(),vset=new Set(vs.map(n=>n.id)),cl=JSON.parse(JSON.stringify([vs,S.tree.edges.filter(e=>vset.has(e.from)&&vset.has(e.to))])),map={};cl[0].forEach(n=>{map[n.id]=uid();n.id=map[n.id]});cl[1].forEach(e=>{e.from=map[e.from];e.to=map[e.to]});
+  const id=newCarteObj(nm.trim()||nextName(),cl[0],cl[1]);persist();save();render();setStatus('Carte « '+S.cartes[id].name+' » enregistrée (sélectionnez-la dans la liste pour la rouvrir)','ok')}
+function deleteCarte(){const c=S.cartes[ACT];if(!c)return;
+  if(!confirm('Supprimer la carte « '+c.name+' » ? Elle sera supprimée pour tous les acteurs. La carte principale n’est pas touchée.'))return;
+  const id=ACT;unswap();delete S.cartes[id];tomb('carte:'+id);setActive(null);selN=new Set();selPb=mainPb;persist();save();render()}
+function viewNote(){
+  if(SW)return'';const np=S.tree.nodes.filter(n=>n.type==='problem').length;if(np<2&&!VS)return'';
+  if(!VS)return`<p class="sm mut" style="margin:4px 0">Tous les problèmes sont affichés. <a href="#" onclick="setOnly(true);return false">N’afficher que le problème sélectionné</a></p>`;
+  const pb=nodeOf(selPb);return`<p class="sm" style="background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:4px 8px;margin:4px 0">Problème affiché : <b>« ${esc((pb.text||'').slice(0,80))} »</b> avec ses causes et ses effets (${np-1} autre(s) masqué(s)). <a href="#" onclick="setOnly(false);return false">Tout afficher</a></p>`}
+function mainLabel(){const T=SW?MAINT:S.tree,pid=SW?mainPb:selPb,n=onlyOne()&&T&&T.nodes.find(x=>x.id===pid&&x.type==='problem');return n?(n.text||'Problème').trim().slice(0,40):'Carte principale'}
+function carteBar(){
+  const cs=Object.values(S.cartes).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  const tab=(id,label,on,tip)=>`<button class="t ${on?'on':''}" onclick="switchCarte('${id}')" title="${esc(tip||label)}">${esc(label)}</button>`;
+  return`<div class="ctabs">${tab('',mainLabel(),!SW,'Carte principale, partagée : elle affiche le problème choisi dans la liste « Problème analysé » (l’onglet prend son nom)')}${cs.map(c=>tab(c.id,c.name,SW&&c.id===ACT)).join('')}<button class="t" onclick="newCarte()" title="Crée une feuille vierge, séparée de la carte principale">＋ Feuille vierge</button>
+   <span class="act">${SW?`<button class="btn sm" onclick="versMain()" title="Ajoute le contenu de cette feuille à la carte principale (les nœuds déjà présents ne sont pas dupliqués)">Verser dans la carte principale</button><button class="btn sm" onclick="renameCarte()">Renommer</button><button class="btn sm" onclick="saveAsCarte()">Dupliquer</button><button class="btn sm bad" onclick="deleteCarte()">Supprimer</button>`:`<button class="btn sm" onclick="saveAsCarte()" title="Copie le problème affiché dans une nouvelle feuille modifiable">Copier dans une feuille…</button>`}</span></div>`}
+function mergeCardInto(c){
+  let added=0;const N=c.nodes||[],map={},used=new Set(),key=n=>n.type+'|'+(n.text||'').trim().toLowerCase();
+  const ac=N.find(n=>n.type==='problem'&&n.pid&&S.tree.nodes.some(m=>m.pid===n.pid)),am=ac&&S.tree.nodes.find(m=>m.pid===ac.pid);
+  const dx=ac?am.x-ac.x:0,dy=ac?am.y-ac.y:0;
+  N.forEach(n=>{
+    const ex=S.tree.nodes.find(m=>!used.has(m.id)&&((n.type==='problem'&&n.pid&&m.pid===n.pid&&m.type==='problem')||key(m)===key(n)));
+    if(ex){used.add(ex.id);map[n.id]=ex.id;return}
+    const o={id:uid(),type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};
+    if(n.pid&&!S.tree.nodes.some(m=>m.pid===n.pid))o.pid=n.pid;S.tree.nodes.push(o);used.add(o.id);map[n.id]=o.id;added++});
+  (c.edges||[]).forEach(e=>{if(map[e.from]&&map[e.to])ensureEdge(map[e.from],map[e.to])});return added}
+function versMain(){
+  const c=S.cartes[ACT];if(!c)return;
+  if(!confirm('Verser le contenu de « '+c.name+' » dans la carte principale ? Les nœuds déjà présents ne seront pas dupliqués. La feuille est conservée.'))return;
+  let added=0;withMain(()=>{added=mergeCardInto(c)});save();render();setStatus(added+' nœud(s) ajouté(s) à la carte principale','ok')}
+function treeHelp(){return`<span class="info" tabindex="0">i<span class="tip">${orient()==='h'?'<span class="tag cause">Causes</span> à gauche, <span class="tag problem">problème central</span> au milieu, <span class="tag effect">effets</span> à droite.':'<span class="tag effect">Effets</span> en haut, <span class="tag problem">problème central</span> au milieu, <span class="tag cause">causes</span> en bas.'} Déplacez un nœud par sa barre colorée ; tirez la poignée <b>⤴</b> d’un nœud sur un autre pour dire « celui-ci est cause de celui-là ». Cliquez sur un lien pour le supprimer, sur l’étiquette pour changer le type.<br><br><b>Sélection multiple :</b> clic sur un nœud, puis <b>Ctrl+clic</b> pour en ajouter ou en retirer (ou Ctrl + cadre tracé dans le vide). Glisser un nœud sélectionné déplace toute la sélection. Ctrl+A : tout sélectionner · Échap : désélectionner · Suppr : supprimer la sélection.<br><br><b>Replier / déplier :</b> petit bouton <b>−</b> / <b>+n</b> à la base des flèches, dans le nœud (en bas pour les causes, en haut pour les effets), ou <b>double clic sur sa barre colorée</b>. Ce réglage est personnel (il n’affecte pas les autres utilisateurs) ; Ctrl+C copie toujours la branche entière, même repliée.<br><br><b>Copier-coller :</b> cliquez sur un nœud puis <b>Ctrl+C</b> : le nœud est copié <i>avec tous ses dépendants</i>. <b>Ctrl+V</b> le colle sur le nœud sélectionné (comme cause), ou librement s’il n’y a pas de sélection (idéal dans une carte vierge).</span></span>`}
+
 /* ---- Représentation (arbre / arête de poisson) ---- */
 const repn=()=>cfg.get('rep')==='f'?'f':'t';
 function setRep(r){cfg.set('rep',r);render()}
@@ -377,14 +486,15 @@ function repBar(){return`<div class="bar"><span class="sm mut">Représentation :
 let selN=new Set();
 let CLIP=(()=>{try{return JSON.parse(localStorage.getItem('pbs_clip'))}catch(e){return null}})();
 function refreshSel(){
-  selN=new Set([...selN].filter(id=>nodeOf(id)));
+  selN=new Set([...selN].filter(id=>nodeOf(id)&&(!VS||VS.has(id))&&!HID.has(id)));
   document.querySelectorAll('#stage .tn').forEach(el=>el.classList.toggle('sel',selN.has(el.dataset.id)));
   const si=$('#selinfo');if(si)si.textContent=selN.size?selN.size+' nœud(s) sélectionné(s)':'aucune sélection';
   const has=!!(CLIP&&CLIP.nodes&&CLIP.nodes.length),ci=$('#clipinfo');if(ci)ci.textContent=has?CLIP.nodes.length+' nœud(s) en mémoire':'';
   document.querySelectorAll('[data-needsel]').forEach(b=>{b.disabled=!selN.size});
   document.querySelectorAll('[data-needclip]').forEach(b=>{b.disabled=!has})}
-function selAll(){selN=new Set(S.tree.nodes.map(n=>n.id));refreshSel()}
+function selAll(){selN=new Set(vnodes().map(n=>n.id));refreshSel()}
 function selNone(){selN=new Set();refreshSel()}
+function copyDeps(){if(!selN.size){alert('Cliquez d’abord sur le nœud principal (par exemple le problème).');return}selBranch('ce');copySel()}
 function selBranch(dir){if(!selN.size)return;
   [...selN].forEach(id=>{if(dir!=='e')collect(id,'c').forEach(x=>selN.add(x.n.id));if(dir!=='c')collect(id,'e').forEach(x=>selN.add(x.n.id))});refreshSel()}
 function outline(ids){
@@ -392,28 +502,38 @@ function outline(ids){
   const walk=(id,d)=>{if(seen.has(id))return;seen.add(id);out.push('  '.repeat(d)+'- '+nodeOf(id).text);E.filter(e=>e.to===id).forEach(e=>walk(e.from,d+1))};
   ids.filter(id=>!E.some(e=>e.from===id)).forEach(id=>walk(id,0));ids.forEach(id=>walk(id,0));
   return out.join('\n')}
-function copySel(){
-  const ids=[...selN].filter(nodeOf);
-  if(!ids.length){alert('Sélectionnez d’abord un ou plusieurs nœuds : clic, Maj+clic, cadre de sélection ou « ＋ Branche des causes ».');return}
+let CLIPTXT='';
+function depIds(id){const n=nodeOf(id);if(!n)return[];const o=[id];
+  if(n.type!=='effect')collect(id,'c').forEach(x=>o.push(x.n.id));
+  if(n.type!=='cause')collect(id,'e').forEach(x=>o.push(x.n.id));return o}
+function copySel(alone){
+  const base=[...selN].filter(nodeOf);
+  if(!base.length){alert('Cliquez d’abord sur un nœud (Maj+clic pour en choisir plusieurs).');return}
+  const ids=alone===true?base:[...new Set(base.flatMap(depIds))];
   const idx={};ids.forEach((id,k)=>idx[id]=k);
-  CLIP={nodes:ids.map(id=>{const n=nodeOf(id);return{type:n.type,text:n.text,x:n.x,y:n.y}}),edges:S.tree.edges.filter(e=>idx[e.from]!==undefined&&idx[e.to]!==undefined).map(e=>[idx[e.from],idx[e.to]])};
+  CLIP={src:base,nodes:ids.map(id=>{const n=nodeOf(id);const o={type:n.type,text:n.text,x:n.x,y:n.y};if(n.pid)o.pid=n.pid;return o}),edges:S.tree.edges.filter(e=>idx[e.from]!==undefined&&idx[e.to]!==undefined).map(e=>[idx[e.from],idx[e.to]])};
   try{localStorage.setItem('pbs_clip',JSON.stringify(CLIP))}catch(e){}
-  try{navigator.clipboard.writeText(outline(ids)).catch(()=>{})}catch(e){}
-  setStatus(ids.length+' nœud(s) copié(s) avec leurs liens (le texte est aussi dans le presse-papiers du système)','ok');refreshSel()}
+  CLIPTXT=outline(ids);try{navigator.clipboard.writeText(CLIPTXT).catch(()=>{})}catch(e){}
+  setStatus(ids.length+' nœud(s) copié(s)'+(alone===true?' (sélection seule)':' avec leurs dépendants')+' — Ctrl+V pour coller','ok');refreshSel()}
+function pasteSmart(){
+  if(selN.size===1){const id=[...selN][0];if(!(CLIP&&CLIP.src&&CLIP.src.includes(id)))return pasteClip('c')}
+  pasteClip('')}
 function pasteClip(mode){
   if(!CLIP||!CLIP.nodes||!CLIP.nodes.length){alert('Rien à coller : copiez d’abord une sélection.');return}
   let target=null;
   if(mode){if(selN.size!==1){alert('Sélectionnez un seul nœud cible pour y rattacher la branche copiée.');return}target=nodeOf([...selN][0]);if(!target)return}
-  const N=CLIP.nodes,ids=N.map(()=>uid()),hasOut=new Set(),hasIn=new Set();
+  const N=CLIP.nodes,ids=N.map(()=>uid()),hasOut=new Set(),hasIn=new Set(),reuse={};
+  if(!mode)N.forEach((n,k)=>{if(n.pid&&n.type==='problem'){const ex=S.tree.nodes.find(o=>o.type==='problem'&&o.pid===n.pid);if(ex){ids[k]=ex.id;reuse[k]=1}}});
   CLIP.edges.forEach(e=>{hasOut.add(e[0]);hasIn.add(e[1])});
   const minx=Math.min(...N.map(n=>n.x)),miny=Math.min(...N.map(n=>n.y)),maxy=Math.max(...N.map(n=>n.y));
   let dx=60,dy=60;
+  if(!target&&!vnodes().length){dx=60-minx;dy=60-miny}
   if(target){dx=target.x-minx;dy=mode==='c'?target.y+130-miny:target.y-130-maxy}
-  const clash=()=>N.some(n=>S.tree.nodes.some(o=>Math.abs(o.x-(n.x+dx))<185&&Math.abs(o.y-(n.y+dy))<95));
+  const clash=()=>N.some((n,k)=>!reuse[k]&&vnodes().some(o=>Math.abs(o.x-(n.x+dx))<185&&Math.abs(o.y-(n.y+dy))<95));
   let g=0;while(clash()&&g<40){dx+=200;g++}
-  N.forEach((n,k)=>{let type=n.type;
+  N.forEach((n,k)=>{if(reuse[k])return;let type=n.type;
     if(target&&type==='problem'){if(mode==='c'&&!hasOut.has(k))type='cause';if(mode==='e'&&!hasIn.has(k))type='effect'}
-    S.tree.nodes.push({id:ids[k],type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)})});
+    {const o={id:ids[k],type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};if(n.pid&&type==='problem'&&!S.tree.nodes.some(q=>q.pid===n.pid))o.pid=n.pid;if(!target&&VS&&selPb)o.pb=selPb;S.tree.nodes.push(o)}});
   CLIP.edges.forEach(e=>ensureEdge(ids[e[0]],ids[e[1]]));
   if(target)N.forEach((n,k)=>{if(mode==='c'&&!hasOut.has(k))ensureEdge(ids[k],target.id);if(mode==='e'&&!hasIn.has(k))ensureEdge(target.id,ids[k])});
   selN=new Set(ids);save();render();
@@ -421,18 +541,25 @@ function pasteClip(mode){
 function deleteSel(){
   const ids=[...selN].filter(nodeOf);if(!ids.length)return;
   if(!confirm('Supprimer '+ids.length+' nœud(s) et leurs liens ? La suppression est partagée avec les autres acteurs.'))return;
-  const set=new Set(ids);ids.forEach(id=>{const n=nodeOf(id);if(n.pid)S.noImp[n.pid]=1;tomb(id)});
+  const set=new Set(ids);ids.forEach(id=>{const n=nodeOf(id);if(n.pid&&!SW)S.noImp[n.pid]=1;tomb(id)});
   S.tree.nodes=S.tree.nodes.filter(n=>!set.has(n.id));S.tree.edges=S.tree.edges.filter(e=>!set.has(e.from)&&!set.has(e.to));
   selN=new Set();save();render()}
 document.addEventListener('keydown',e=>{
   if(P!==3||repn()!=='t'||!$('#stage'))return;
-  const t=e.target;if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable))return;
+  const t=e.target,editable=t&&t.isContentEditable,field=t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
+  if(field)return;
   const k=(e.key||'').toLowerCase(),mod=e.ctrlKey||e.metaKey,hasText=String(getSelection()).length>0;
   if(mod&&k==='c'){if(selN.size&&!hasText){e.preventDefault();copySel()}}
-  else if(mod&&k==='v'){e.preventDefault();pasteClip('')}
+  else if(editable)return;
+  else if(mod&&k==='v'){e.preventDefault();pasteSmart()}
   else if(mod&&k==='a'){e.preventDefault();selAll()}
   else if(e.key==='Delete'||e.key==='Backspace'){if(selN.size){e.preventDefault();deleteSel()}}
   else if(e.key==='Escape')selNone()});
+/* Ctrl+V pendant que le curseur est dans le texte d'un nœud : si le presse-papiers contient notre copie, on colle des nœuds et non du texte */
+document.addEventListener('paste',e=>{
+  if(P!==3||repn()!=='t'||!$('#stage')||!CLIPTXT)return;
+  const t=(e.clipboardData&&e.clipboardData.getData('text/plain'))||'';
+  if(t===CLIPTXT){e.preventDefault();pasteSmart()}});
 
 /* ---- Arête de poisson (Ishikawa) construite à partir de l'arbre ---- */
 let fishPb=null;
@@ -471,15 +598,18 @@ function fishDiagram(title,bones,effects){
 function fishView(){
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
   if(!pbs.length)return'<p class="mut">Aucun problème dans l’arbre : repassez en « Arbre à problèmes » puis cliquez sur « Mettre à jour la carte ».</p>';
-  if(!pbs.find(n=>n.id===fishPb))fishPb=(nodeOf(selPb)&&nodeOf(selPb).type==='problem')?selPb:pbs[0].id;
+  if(!pbs.find(n=>n.id===selPb))selPb=pbs[0].id;fishPb=selPb;
   const pb=nodeOf(fishPb),svg=fishDiagram(pb.text,fishBones(fishPb),collect(fishPb,'e').map(x=>x.n.text));
-  return`<div class="bar"><label style="margin:0">Problème</label><select style="width:auto;max-width:440px" onchange="fishPb=this.value;selPb=this.value;render()">${pbs.map(n=>`<option value="${n.id}" ${n.id===fishPb?'selected':''}>${esc(n.text.slice(0,70))}</option>`).join('')}</select><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadFish()">Télécharger l’image (SVG)</button></div>
+  return`<div class="bar"><label style="margin:0">Problème</label><select style="width:auto;max-width:440px" onchange="selPb=this.value;fishPb=this.value;render()">${pbs.map(n=>`<option value="${n.id}" ${n.id===fishPb?'selected':''}>${esc(n.text.slice(0,70))}</option>`).join('')}</select><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadFish()">Télécharger l’image (SVG)</button></div>
   <p class="sm mut">Vue en lecture seule construite à partir de l’arbre : les causes directes du problème forment les arêtes principales (regroupées par famille 6M lorsqu’elles viennent de l’outil Ishikawa), et leurs sous-causes figurent le long de chaque arête. Pour modifier, repassez en « Arbre à problèmes ».</p>
   <div style="overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fff">${svg}</div>`}
 function downloadFish(){const pb=nodeOf(fishPb);if(!pb)return;download('ishikawa_'+(pb.text||'probleme').replace(/[^\w]+/g,'_').slice(0,40)+'.svg',fishDiagram(pb.text,fishBones(fishPb),collect(fishPb,'e').map(x=>x.n.text)),'image/svg+xml')}
 function nodeHTML(n){const lab={problem:'Problème',cause:'Cause',effect:'Effet'}[n.type];
-  return`<div class="tn ${n.type}${selN.has(n.id)?' sel':''}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div></div>`}
-function fit(){const st=$('#stage');if(!st)return;let mx=900,my=560;S.tree.nodes.forEach(n=>{const[l,t]=disp(n);mx=Math.max(mx,l+260);my=Math.max(my,t+200)});st.style.width=mx+'px';st.style.height=my+'px'}
+  return`<div class="tn ${n.type}${selN.has(n.id)?' sel':''}${orient()==='v'&&hasFoldC(n)?' hc':''}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div>${foldRow(n)}</div>`}
+function foldRow(n){return foldDirs(n).map(d=>{const c=collect(n.id,d).length;if(!c)return'';const on=FOLD.has(d+':'+n.id),w=d==='c'?(c>1?'causes':'cause'):(c>1?'effets':'effet');
+  return`<button class="fd ${d} ${on?'on':''}" data-act="fold" data-dir="${d}" title="${on?'Déplier':'Replier'} : ${c} ${w}${on?' masqué'+(d==='c'?'e':'')+(c>1?'s':''):''} (double clic sur la barre colorée du nœud)">${on?'+'+c:'−'}</button>`}).join('')}
+const hasFoldC=n=>foldDirs(n).includes('c')&&collect(n.id,'c').length>0;
+function fit(){const st=$('#stage');if(!st)return;let mx=900,my=560;vnodes().forEach(n=>{const[l,t]=disp(n);mx=Math.max(mx,l+260);my=Math.max(my,t+200)});st.style.width=mx+'px';st.style.height=my+'px'}
 function drawEdges(){
   const svg=$('#ed'),st=$('#stage');if(!svg)return;
   let h='<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#6b7280"/></marker></defs>';
@@ -498,22 +628,23 @@ function initTree(){
   const st=$('#stage');if(!st)return;fit();drawEdges();
   st.onpointerdown=e=>{
     const nd=e.target.closest('.tn');
-    if(!nd){if(e.target===st||e.target.id==='ed')startBand(e);return}
-    const id=nd.dataset.id,mod=e.shiftKey||e.ctrlKey||e.metaKey;
+    if(!nd){if(e.target===st||e.target.id==='ed'){if(e.ctrlKey||e.metaKey)startBand(e);else if(selN.size){selN=new Set();refreshSel()}}return}
+    const id=nd.dataset.id,mod=e.ctrlKey||e.metaKey;
     if(e.target.closest('.lk')){e.preventDefault();startLink(nd,e);return}
     if(e.target.closest('button'))return;
-    if(e.altKey){e.preventDefault();selN=new Set([id]);selBranch('c');return}
     if(mod){if(selN.has(id))selN.delete(id);else selN.add(id);refreshSel();e.preventDefault()}
     else if(!selN.has(id)){selN=new Set([id]);refreshSel()}
     if(e.target.closest('.grip')&&!e.target.closest('.tl')){e.preventDefault();startMove(nd,e,mod)}};
   st.onclick=e=>{
     const eh=e.target.closest('.eh');if(eh){if(confirm('Supprimer ce lien de causalité ?')){const ed=S.tree.edges.splice(+eh.dataset.i,1)[0];tomb('e:'+ed.from+'>'+ed.to);save();drawEdges()}return}
     const nd=e.target.closest('.tn'),t=e.target.closest('[data-act]');if(!nd||!t)return;const n=nodeOf(nd.dataset.id),a=t.dataset.act;
-    if(a==='type'){if(e.shiftKey||e.ctrlKey||e.metaKey||e.altKey)return;n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
+    if(a==='type'){if(e.ctrlKey||e.metaKey)return;n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
+    else if(a==='fold'){toggleFold(n.id,t.dataset.dir)}
     else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);save();render();focusNode(c.id)}
     else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);save();render();focusNode(c.id)}
-    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){if(n.pid)S.noImp[n.pid]=1;S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
+    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){if(n.pid&&!SW)S.noImp[n.pid]=1;S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
   };
+  st.ondblclick=e=>{const nd=e.target.closest('.tn');if(!nd||!e.target.closest('.grip')||e.target.closest('button,.tl'))return;const n=nodeOf(nd.dataset.id);if(n)toggleFold(n.id,n.type==='effect'?'e':'c')};
   st.oninput=e=>{const t=e.target.closest('[data-act="txt"]');if(!t)return;const n=nodeOf(t.closest('.tn').dataset.id);n.text=t.innerText.replace(/\s+/g,' ').trim();drawEdges()};
   st.onfocusout=e=>{if(e.target.closest&&e.target.closest('[data-act="txt"]'))save()};
   st.onkeydown=e=>{if(e.key==='Enter'&&e.target.closest('[data-act="txt"]')){e.preventDefault();e.target.blur()}};
@@ -545,12 +676,12 @@ function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.d
     const t=document.elementFromPoint(ev.clientX,ev.clientY),tn=t&&t.closest('.tn');
     if(tn&&tn.dataset.id!==id){const to=tn.dataset.id;
       if(S.tree.edges.some(x=>x.from===to&&x.to===id)){alert('Ce lien existe déjà dans le sens inverse.');return}
-      if(ensureEdge(id,to)){save();drawEdges()}}};
+      if(ensureEdge(id,to)){save();render()}}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
-function addFree(type){const cv=$('#cv'),[fx,fy]=fromDisp(cv.scrollLeft+40,cv.scrollTop+40);const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',fx,fy);save();render();focusNode(n.id)}
-function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>{tomb(n.id);if(n.pid)S.noImp[n.pid]=1});S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};S.map={};save();render()}}
+function addFree(type){const cv=$('#cv'),[fx,fy]=fromDisp(cv.scrollLeft+40,cv.scrollTop+40);const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',fx,fy);if(type==='problem'&&VS){selPb=n.id;selN=new Set()}else if(VS&&selPb)n.pb=selPb;save();render();focusNode(n.id)}
+function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>{tomb(n.id);if(n.pid&&!SW)S.noImp[n.pid]=1});S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};if(!SW)S.map={};save();render()}}
 function autoLayout(){
-  const N=S.tree.nodes,E=S.tree.edges;if(!N.length)return;
+  const N=baseNodes(),NS=new Set(N.map(n=>n.id)),E=S.tree.edges.filter(e=>NS.has(e.from)&&NS.has(e.to));if(!N.length)return;
   const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{if(adj[e.from]&&adj[e.to]){adj[e.from].push(e.to);adj[e.to].push(e.from)}});
   const seen=new Set(),comps=[];
   N.forEach(n=>{if(seen.has(n.id))return;const c=[],q=[n.id];seen.add(n.id);while(q.length){const i=q.shift();c.push(i);adj[i].forEach(j=>{if(!seen.has(j)){seen.add(j);q.push(j)}})}comps.push(c)});
@@ -743,6 +874,7 @@ function buildTables(){
   T['2_Matrice']=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(Pr.map((a,i)=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))));
   T['2_Pareto']=[['Rang','ID','Problème','Exercée','Reçue','Gravité','Score','%','% cumulé','Rôle','Prioritaire']].concat(rows.map((r,k)=>[k+1,'P'+(r.i+1),r.p.t,r.act,r.pas,r.g,r.score,+r.pct.toFixed(1),+r.cum.toFixed(1),r.role,r.prio?'Oui':'Non']));
   const typ={problem:'Problème',cause:'Cause',effect:'Effet'},tx=id=>(nodeOf(id)||{}).text||'';
+  if(Object.keys(S.cartes||{}).length)T['3_Cartes']=[['Carte','Type','Texte','Auteur','Modifiée']].concat(Object.values(S.cartes).sort((a,b)=>(a.name||'').localeCompare(b.name||'')).flatMap(c=>(c.nodes||[]).map(n=>[c.name,({problem:'Problème',cause:'Cause',effect:'Effet'})[n.type]||n.type,n.text,c.by||'',c.ts?new Date(c.ts).toLocaleString('fr-FR'):''])));
   T['3_Arbre']=[['ID','Type','Texte','Est cause de (liens)']].concat(S.tree.nodes.map(n=>[n.id,typ[n.type],n.text,S.tree.edges.filter(e=>e.from===n.id).map(e=>tx(e.to)).join(' ; ')]));
   const ac=[['Problème','Méthode','Famille / niveau','Cause']];
   Object.keys(S.whys).forEach(k=>(S.whys[k]||[]).forEach((t,i)=>{if(t)ac.push([tx(k),'5 Pourquoi','Pourquoi '+(i+1),t])}));
@@ -782,11 +914,13 @@ function mergeState(L,R){
   M.tree.nodes=union(R.tree.nodes,L.tree.nodes,n=>n.id).filter(n=>!dead(n.id));
   const nid=new Set(M.tree.nodes.map(n=>n.id));
   M.tree.edges=union(R.tree.edges,L.tree.edges,e=>e.from+'>'+e.to).filter(e=>nid.has(e.from)&&nid.has(e.to)&&!dead('e:'+e.from+'>'+e.to));
+  M.cartes={};new Set([...Object.keys(R.cartes||{}),...Object.keys(L.cartes||{})]).forEach(k=>{const a=(L.cartes||{})[k],b=(R.cartes||{})[k],o=!a?b:!b?a:((a.ts||0)>=(b.ts||0)?a:b);
+    if(o&&(o.ts||0)>(M.tomb['carte:'+k]||0))M.cartes[k]=o});
   M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   return M}
-const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.parked,S.keep,S.noImp,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
+const sig=()=>JSON.stringify([S.title,S.problems,S.matrix,S.sel,S.selReset,S.parked,S.keep,S.noImp,S.cartes,S.tree,S.actions,S.logframe,S.obj,S.pdca,S.whys,S.ishi]);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
 async function syncNow(silent){
@@ -797,8 +931,9 @@ async function syncNow(silent){
     for(let t=0;t<4;t++){
       const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));
       if(!r.ok)throw new Error(r.error||'réponse invalide');
-      const before=sig();if(r.state)S=mergeState(S,normalize(r.state));const changed=before!==sig();
-      const res=await readJSON(await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',token:cfg.get('token'),baseRev:r.rev||0,state:S,tables:buildTables()})}));
+      let changed=false,body='';
+      withMain(()=>{const before=sig();if(r.state)S=mergeState(S,normalize(r.state));changed=before!==sig();body=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:r.rev||0,state:S,tables:buildTables()})});
+      const res=await readJSON(await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body}));
       if(res.ok){persist();setStatus('Synchronisé à '+new Date().toLocaleTimeString('fr-FR'),'ok');if(changed)refreshView();return}
       if(!res.conflict)throw new Error(res.error||'erreur');
     }
