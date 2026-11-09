@@ -82,6 +82,27 @@ td.diag{background:#e5e7eb}
 .oin{display:flex;gap:6px;margin-top:3px}
 .oin input{flex:1}
 .tn.sel{outline:3px solid #2563eb;outline-offset:2px}
+.swot{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:820px){.swot{grid-template-columns:1fr}}
+.sq{border-radius:10px;padding:10px 12px;border:2px solid var(--c);background:var(--b)}
+.sq h3{margin:0 0 2px;font-size:15px;color:var(--c)}.sq .sub{font-size:11.5px;color:#6b7280;margin-bottom:6px}
+.sq .it{display:flex;gap:6px;align-items:flex-start;margin:5px 0}
+.sq .it textarea{flex:1;border:1px solid transparent;background:rgba(255,255,255,.75);border-radius:6px;padding:4px 6px;resize:none;font:inherit;font-size:13px;overflow:hidden}
+.sq .it textarea:focus{border-color:var(--c);background:#fff}
+.sq .it .by{font-size:10.5px;color:#6b7280}
+.sq .it button{border:1px solid #d1d5db;background:#fff;border-radius:6px;font-size:11px;padding:2px 6px;cursor:pointer;white-space:nowrap}
+.sq .swin{width:100%;margin-top:6px;border:1px dashed var(--c);background:#fff;border-radius:6px;padding:6px 8px}
+.sq.S{--c:#16a34a;--b:#f0fdf4}.sq.W{--c:#d97706;--b:#fffbeb}.sq.O{--c:#2563eb;--b:#eff6ff}.sq.T{--c:#dc2626;--b:#fef2f2}
+.cz{display:flex;gap:4px;align-items:flex-start;margin:3px 0}
+.cz textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;font-size:12.5px;resize:none;overflow:hidden;background:#fff}
+.cz .lv{flex:none;font-size:10px;font-weight:700;background:#ffedd5;color:#7c2d12;border-radius:999px;padding:2px 7px;margin-top:3px;white-space:nowrap}
+.cz .lv.rt{background:#fecaca;color:#7f1d1d}
+.cz .mini,.cz select.mini{flex:none;border:1px solid #d1d5db;background:#f9fafb;border-radius:6px;font-size:11px;padding:2px 6px;cursor:pointer;width:auto}
+.whyin{width:100%;border:1px dashed #0f766e;border-radius:6px;padding:5px 8px;font:inherit;font-size:12.5px;background:#fff}
+.cz .whyin{flex:1;width:auto}
+.cz2{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:6px 8px;margin:6px 0}
+details.cat{border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin:6px 0;background:#f8fafc}
+details.cat summary{cursor:pointer}
 .tn .fd{position:absolute;min-width:16px;height:16px;padding:0 4px;border-radius:999px;border:1px solid #9ca3af;background:#fff;font:700 11px/13px system-ui,sans-serif;cursor:pointer;color:#374151;z-index:2;box-shadow:0 1px 2px rgba(0,0,0,.15)}
 .tn .fd:hover{background:#e5e7eb}
 .tn .fd.on{background:#fef3c7;border-color:#f59e0b;color:#78350f}
@@ -116,6 +137,7 @@ details summary{cursor:pointer;font-weight:600}
   <span id="status" onclick="if(this.className==='bad')testLink()" title="Cliquez sur un message d’échec pour lancer le diagnostic"></span>
   <button class="hb" onclick="syncNow(false)" title="Reçoit les saisies des autres acteurs, fusionne, puis envoie les vôtres">⟳ Synchroniser</button>
   <button class="hb" onclick="testLink()" title="Vérifie la lecture et l’écriture dans le Google Sheet et affiche ce qui y est enregistré">☁ Tester la liaison</button>
+  <button class="hb" onclick="histOpen()" title="Retrouver une version précédente de la carte">🕘 Historique</button>
   <button class="hb" onclick="openCfg()">⚙ Paramètres</button>
   <button class="hb" onclick="exportJSON()">Exporter JSON</button>
   <button class="hb" onclick="$('#jsonIn').click()">Importer JSON</button>
@@ -128,6 +150,15 @@ details summary{cursor:pointer;font-weight:600}
   <h2>Liaison avec le Google Sheet</h2>
   <ul id="dgList"></ul>
   <div class="bar"><button class="btn pri" onclick="testLink()">Relancer le test</button><a class="btn" id="dgSheet" target="_blank" rel="noopener">Ouvrir le Google Sheet</a><button class="btn" onclick="$('#diag').close()">Fermer</button></div>
+</dialog>
+<dialog id="hist" class="dg">
+  <h2>Historique et récupération</h2>
+  <p class="mut sm">Une sauvegarde de la carte est conservée automatiquement dans ce navigateur (20 dernières versions, avant chaque suppression également). Restaurer remplace la carte actuelle.</p>
+  <ul id="histList" style="padding-left:18px"></ul>
+  <details><summary><b>Récupérer depuis le Google Sheet</b></summary>
+    <p class="mut sm">Si des données ont été perdues : 1) fermez l’outil chez tous les acteurs ; 2) dans le Google Sheet, <i>Fichier → Historique des versions</i>, restaurez une version d’avant la perte ; 3) rouvrez l’outil avec <code>#recup</code> à la fin de l’adresse (pas de synchronisation automatique) ; 4) cliquez ci-dessous.</p>
+    <button class="btn" onclick="histFromSheet()">Récupérer le contenu du Sheet</button></details>
+  <div style="margin-top:12px"><button class="btn" onclick="closeHist()">Fermer</button></div>
 </dialog>
 <dialog id="cfg">
   <h2>Paramètres de partage</h2>
@@ -146,7 +177,7 @@ details summary{cursor:pointer;font-weight:600}
 
 <script>
 /* Liaison par défaut : les utilisateurs n'ont rien à configurer. Un administrateur peut la modifier ici. */
-const DEFAULTS={url:'https://script.google.com/macros/s/AKfycbwzyKi2vFv56MP5SJE9B-iRgoqnaxS-oPMDLUBFg021lpZdU9tBw4UyQpwmKr7hXbsPNw/exec',token:''};
+const DEFAULTS={url:'https://script.google.com/macros/s/AKfycby5A5KdR-vz3K0ePmyLuNKBh6-4kqgBBHGGv3lJvOToX_Vq-Yrh9KWYoseo8huOoySiDA/exec',token:''};
 const SHEET_URL='https://docs.google.com/spreadsheets/d/1Kr7LsNXrBQMuYUElNAfOQ55OS4P67fg7ofREqVz9Ta8/edit?gid=0#gid=0';
 const $=(s,r=document)=>r.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -155,17 +186,17 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{},cartes:{}}}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{},cartes:{},swot:[]}}
 function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
-let selP=null,p3m='why',selPb=null,p4='obj',p5='lf';
+let selP=null,selPb=null,p4='obj',p5='lf';
 const cfg={get:k=>{let v='';try{v=localStorage.getItem('pbs_'+k)||''}catch(e){}return v||DEFAULTS[k]||''},set:(k,v)=>{try{localStorage.setItem('pbs_'+k,v)}catch(e){}}};
 let autoT=null;
 function tomb(id){S.tomb[id]=Date.now()}
 function persist(){const s=SW;unswap();try{localStorage.setItem('pbs_state',JSON.stringify(S))}catch(e){}if(s)reswap()}
 let PEND=false;
-function save(){S.updated=Date.now();persist();if(cfg.get('auto')!=='0'&&cfg.get('url')){PEND=true;clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true,true),1000)}}
+function save(){S.updated=Date.now();persist();try{histSnap(false)}catch(e){}if(cfg.get('auto')!=='0'&&cfg.get('url')){PEND=true;clearTimeout(autoT);autoT=setTimeout(()=>syncNow(true,true),1000)}}
 function setStatus(m,k){const s=$('#status');s.textContent=m;s.className=k||''}
 const nodeOf=id=>S.tree.nodes.find(n=>n.id===id);
 const emptyMsg=t=>`<div class="card"><p class="mut">${t}</p></div>`;
@@ -202,7 +233,44 @@ function plistHTML(){
 function dupPairs(){const out=[];for(let i=0;i<S.problems.length;i++)for(let j=i+1;j<S.problems.length;j++){const a=S.problems[i],b=S.problems[j];if(S.ign[a.id+'|'+b.id])continue;if(isDup(a.t,b.t))out.push([a,b])}return out}
 function dupHTML(){const d=dupPairs();if(!d.length)return'';
   return`<div class="card" style="border-color:#f59e0b;background:#fffbeb"><h3 style="margin-top:0">Doublons possibles (${d.length})</h3><p class="sm mut">Ces problèmes se ressemblent. Fusionnez-les pour éviter la redondance (liens de la matrice et de l'arbre conservés).</p>`+d.map(([a,b])=>`<div class="or"><b>P${S.problems.indexOf(a)+1}</b> ${esc(a.t)} <span class="mut sm">(${esc(a.by||'—')})</span><br><b>P${S.problems.indexOf(b)+1}</b> ${esc(b.t)} <span class="mut sm">(${esc(b.by||'—')})</span><div class="bar"><button class="btn sm pri" onclick="mergeProb('${a.id}','${b.id}')">Fusionner dans P${S.problems.indexOf(a)+1}</button><button class="btn sm" onclick="ignDup('${a.id}','${b.id}')">Problèmes distincts</button></div></div>`).join('')+'</div>'}
-function ph1(){
+function setP1(m){cfg.set('p1m',m);render()}
+function ph1(){const m=cfg.get('p1m')==='swot'?'swot':'bs';
+  return`<div class="tabs"><button class="${m==='bs'?'on':''}" onclick="setP1('bs')">Brainstorming · QQOQCCP</button><button class="${m==='swot'?'on':''}" onclick="setP1('swot')">SWOT (FFOM) <span class="pill b">${S.swot.length}</span></button></div>${m==='swot'?swotHTML():ph1bs()}`}
+/* ---------- SWOT / FFOM : forces, faiblesses (interne) · opportunités, menaces (externe) ---------- */
+const SWQ={S:['Forces','Ce que nous maîtrisons et faisons bien (interne)'],W:['Faiblesses','Ce qui nous limite ou fonctionne mal (interne)'],O:['Opportunités','Facteurs externes favorables à saisir'],T:['Menaces','Facteurs externes défavorables à anticiper']};
+function swotHTML(){
+  const me=myName(),rows=h=>h,q=k=>{const L=S.swot.filter(x=>x.q===k).sort((a,b)=>(a.ts||0)-(b.ts||0));
+    return`<div class="sq ${k}"><h3>${SWQ[k][0]} <span class="pill">${L.length}</span></h3><div class="sub">${SWQ[k][1]}</div>
+    ${L.map(x=>{const pr=x.pid&&S.problems.find(p=>p.id===x.pid);return`<div class="it"><div style="flex:1"><textarea rows="${Math.max(1,Math.ceil((x.t||'').length/44))}" onchange="setSwot('${x.id}',this.value)" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'">${esc(x.t)}</textarea>${x.by&&x.by!==me?`<div class="by">par ${esc(x.by)}</div>`:''}</div>
+      ${(k==='W'||k==='T')?(pr?`<span class="pill g" title="Ce point est dans la liste des problèmes (phase 1)">✓ P${S.problems.indexOf(pr)+1}</span>`:`<button onclick="swotToProblem('${x.id}')" title="Ajoute ce point à la liste des problèmes à prioriser">→ Problème</button>`):''}
+      <button onclick="delSwot('${x.id}')" title="Supprimer (pour tous les acteurs)">✕</button></div>`}).join('')||'<div class="sub"><i>Aucun élément pour l’instant</i></div>'}
+    <input class="swin" data-q="${k}" placeholder="＋ Ajouter (Entrée)…" onkeydown="if(event.key==='Enter'){addSwot('${k}',this)}"></div>`};
+  return`<div class="card"><h2>Analyse SWOT (FFOM)</h2><p class="mut sm">Chaque acteur ajoute ses éléments : ils sont fusionnés avec ceux des autres. Les <b>faiblesses</b> et les <b>menaces</b> peuvent être transformées en problèmes à prioriser (bouton « → Problème »).</p>
+   <div class="bar"><button class="btn sm" onclick="downloadSwot()">Télécharger l’image (SVG)</button></div>
+   <div class="sub" style="margin:2px 0 4px;font-weight:600">Origine interne</div><div class="swot">${q('S')}${q('W')}</div>
+   <div class="sub" style="margin:10px 0 4px;font-weight:600">Origine externe</div><div class="swot">${q('O')}${q('T')}</div></div>`}
+function addSwot(k,el){const t=el.value.trim();if(!t)return;S.swot.push({id:uid(),q:k,t,by:myName(),ts:Date.now()});save();render();const n=$('.swin[data-q="'+k+'"]');if(n)n.focus()}
+function setSwot(id,v){const x=S.swot.find(s=>s.id===id);if(!x)return;v=v.trim();if(!v){delSwot(id);return}x.t=v;x.ts=Date.now();save()}
+function delSwot(id){const x=S.swot.find(s=>s.id===id);if(!x)return;if(x.t&&x.t.length>0&&!confirm('Supprimer « '+x.t.slice(0,60)+' » ? Il disparaîtra aussi chez les autres acteurs.'))return;S.swot=S.swot.filter(s=>s.id!==id);tomb(id);save();render()}
+function swotToProblem(id){const x=S.swot.find(s=>s.id===id);if(!x)return;const t=x.t.trim();
+  const d=S.problems.find(q=>isDup(q.t,t));
+  if(d){if(confirm('« '+t+' » ressemble à un problème déjà saisi :\n« '+d.t+' »\n\nLier ce point à ce problème existant (OK) ou créer un nouveau problème (Annuler) ?')){x.pid=d.id;x.ts=Date.now();save();render();return}}
+  const np={id:uid(),t,g:3,q:'',w:'',o:'',d:'',c:'',m:'',y:'',by:myName(),ts:Date.now()};S.problems.push(np);x.pid=np.id;x.ts=Date.now();save();render();setStatus('Ajouté à la liste des problèmes (phase 1)','ok')}
+function swotSVG(){
+  const W=420,LH=16,CPL=52,pad=24,head=40,gap=14;
+  const wrap=s=>{const o=[''];String(s||'').split(/\s+/).forEach(w=>{const c=o[o.length-1];if(c&&(c+' '+w).length>CPL)o.push(w);else o[o.length-1]=c?c+' '+w:w});return o};
+  const col={S:['#16a34a','#f0fdf4'],W:['#d97706','#fffbeb'],O:['#2563eb','#eff6ff'],T:['#dc2626','#fef2f2']};
+  const data=k=>S.swot.filter(x=>x.q===k).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(x=>wrap(x.t));
+  const hq=k=>40+data(k).reduce((s,l)=>s+l.length*LH+6,0)+8;
+  const r1=Math.max(hq('S'),hq('W'),90),r2=Math.max(hq('O'),hq('T'),90),Wd=pad*2+W*2+gap,Hd=pad+head+r1+gap+r2+pad;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wd} ${Hd}" width="${Wd}" height="${Hd}" font-family="system-ui,Segoe UI,sans-serif"><rect width="${Wd}" height="${Hd}" fill="#fff"/><text x="${pad}" y="${pad+14}" font-size="16" font-weight="700" fill="#12343b">Analyse SWOT (FFOM) — ${esc(S.title||'')}</text>`;
+  [['S',0,0,r1],['W',1,0,r1],['O',0,1,r2],['T',1,1,r2]].forEach(([k,cx,cy,hh])=>{
+    const x=pad+cx*(W+gap),y=pad+head+(cy?r1+gap:0);
+    s+=`<rect x="${x}" y="${y}" width="${W}" height="${hh}" rx="10" fill="${col[k][1]}" stroke="${col[k][0]}" stroke-width="2"/><text x="${x+12}" y="${y+22}" font-size="14" font-weight="700" fill="${col[k][0]}">${SWQ[k][0]} (${S.swot.filter(z=>z.q===k).length})</text>`;
+    let yy=y+44;data(k).forEach(L=>{L.forEach((t,i)=>{s+=`<text x="${x+(i?24:12)}" y="${yy}" font-size="12.5" fill="#1f2937">${i?'':'• '}${esc(t)}</text>`;yy+=LH});yy+=6})});
+  return s+'</svg>'}
+function downloadSwot(){if(!S.swot.length){alert('Aucun élément à exporter.');return}download('SWOT_'+(S.title||'analyse').replace(/[^\w]+/g,'_').slice(0,40)+'.svg',swotSVG(),'image/svg+xml')}
+function ph1bs(){
   const p=S.problems.find(x=>x.id===selP);
   const ed=p?`<h2>Décrire le problème P${S.problems.indexOf(p)+1} <span class="mut sm" style="font-weight:400">${p.by?'saisi par '+esc(p.by):''}</span></h2>
    <label>Intitulé du problème</label><input value="${esc(p.t)}" onchange="setP('${p.id}','t',this.value);$('#plist').innerHTML=plistHTML()">
@@ -279,7 +347,8 @@ function ph2(){
 }
 
 /* ---------- Phase 3 : Arbre à problèmes ---------- */
-const CATS=["Main-d'œuvre","Méthodes","Matériel","Matières","Milieu","Management"];
+const CATS=["Logistique","Chaîne de froid","Surveillance","Vaccination","Communication","Données et SE"];
+const CATHINT={"Logistique":"transport, carburant, véhicules, approvisionnement en vaccins et intrants (seringues, boîtes de sécurité)","Chaîne de froid":"réfrigérateurs, pannes, énergie (solaire, électricité), suivi des températures, maintenance","Surveillance":"détection et notification des cas, MAPI, recherche active, laboratoire, investigation","Vaccination":"stratégies fixe / avancée / mobile, sessions, ressources humaines, couverture, abandons, perdus de vue","Communication":"mobilisation sociale, sensibilisation, rumeurs, hésitation vaccinale, relais communautaires","Données et SE":"rapports, qualité des données, DHIS2, supervision, monitorage, retour d\'information"};
 function freeSpot(x,y){let g=0;while(vnodes().some(n=>Math.abs(n.x-x)<185&&Math.abs(n.y-y)<95)&&g<60){x+=190;g++}return[x,y]}
 function addNode(type,text,x,y,pid){const[fx,fy]=freeSpot(x,y);let id=uid();if(pid&&type==='problem'){id='n'+pid;let g=0;while(S.tomb[id]||S.tree.nodes.some(m=>m.id===id))id='n'+pid+'~'+(++g)}const n={id,type,text,x:fx,y:fy};if(pid)n.pid=pid;S.tree.nodes.push(n);return n}
 function ensureEdge(from,to){if(from===to)return false;if(S.tree.edges.some(e=>e.from===from&&e.to===to))return false;delete S.tomb['e:'+from+'>'+to];S.tree.edges.push({from,to});if(FOLD.delete('c:'+to)|FOLD.delete('e:'+from))foldSave();return true}
@@ -328,7 +397,7 @@ function parkProblem(pid){
   const mine=new Set(branch(pn.id));
   S.tree.nodes.filter(q=>q.type==='problem'&&q.id!==pn.id).forEach(q=>branch(q.id).forEach(i=>mine.delete(i)));mine.add(pn.id);
   const ids=[...mine],idx={};ids.forEach((id,k)=>idx[id]=k);
-  const b={ts:Date.now(),by:cfg.get('author')||'',label:pn.text,nodes:ids.map(id=>{const n=nodeOf(id);return{type:n.type,text:n.text,x:n.x,y:n.y,pid:n.pid||''}}),edges:[],ext:[],objs:{},acts:[],whys:S.whys[pn.id]||null,ishi:S.ishi[pn.id]||null,map:{}};
+  const b={ts:Date.now(),by:cfg.get('author')||'',label:pn.text,nodes:ids.map(id=>{const n=nodeOf(id);return{type:n.type,text:n.text,x:n.x,y:n.y,pid:n.pid||'',cat:n.cat||''}}),edges:[],ext:[],objs:{},acts:[],whys:S.whys[pn.id]||null,ishi:S.ishi[pn.id]||null,map:{}};
   S.tree.edges.forEach(e=>{const a=idx[e.from],c=idx[e.to];
     if(a!==undefined&&c!==undefined)b.edges.push([a,c]);else if(a!==undefined)b.ext.push({k:a,o:e.to,out:1});else if(c!==undefined)b.ext.push({k:c,o:e.from,out:0})});
   ids.forEach((id,k)=>{if(S.obj[id])b.objs[k]=S.obj[id]});
@@ -341,7 +410,7 @@ function parkProblem(pid){
 function restorePark(pid){
   const b=S.parked[pid];if(!b)return false;
   const ids=b.nodes.map(()=>uid()),live=S.tree.nodes.length,mx=S.tree.nodes.reduce((m,n)=>Math.max(m,n.x),0),mn=Math.min(...b.nodes.map(n=>n.x)),dx=live?mx+220-mn:0;
-  b.nodes.forEach((n,k)=>{const o={id:ids[k],type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:n.y};if(n.pid)o.pid=n.pid;S.tree.nodes.push(o)});
+  b.nodes.forEach((n,k)=>{const o={id:ids[k],type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:n.y};if(n.pid)o.pid=n.pid;if(n.cat)o.cat=n.cat;if(o.type==="problem")o.seeded=1;S.tree.nodes.push(o)});
   b.edges.forEach(e=>S.tree.edges.push({from:ids[e[0]],to:ids[e[1]]}));
   b.ext.forEach(x=>{if(nodeOf(x.o)){if(x.out)ensureEdge(ids[x.k],x.o);else ensureEdge(x.o,ids[x.k])}});
   Object.keys(b.objs||{}).forEach(k=>{S.obj[ids[k]]=b.objs[k]});
@@ -363,8 +432,16 @@ function p3banners(){
   if(stale.length)o+=`<div class="card" style="border-color:#f59e0b;background:#fffbeb"><h3 style="margin-top:0">Ne sont plus prioritaires (${stale.length})</h3><p class="sm mut">Ces problèmes figurent dans l'arbre mais ne sont plus parmi les priorités de la phase 2. Mettez-les de côté pour les sauvegarder avec toute leur analyse (causes, effets, 5 Pourquoi / Ishikawa, objectifs) : ils reviendront automatiquement s'ils redeviennent prioritaires.</p>${stale.map(n=>`<div class="or"><b>${pnum(n.pid)}</b> ${esc(n.text)}<div class="bar"><button class="btn sm pri" onclick="parkProblem('${n.pid}')">Mettre de côté (récupérable)</button><button class="btn sm" onclick="keepPb('${n.pid}')">Garder dans l'arbre</button></div></div>`).join('')}</div>`;
   if(pk.length)o+=`<details class="card"><summary>Problèmes mis de côté (${pk.length})</summary>${pk.map(k=>{const b=S.parked[k];return`<div class="or"><b>${pnum(k)}</b> ${esc(b.label)} <span class="mut sm">· ${b.nodes.length-1} élément(s) d'analyse · ${new Date(b.ts).toLocaleDateString('fr-FR')}${b.by?' · '+esc(b.by):''}</span> ${isPrio(k)?'<span class="pill g">redevenu prioritaire</span>':''}<div class="bar"><button class="btn sm" onclick="restoreClick('${k}')">Restaurer dans l'arbre</button><button class="btn sm bad" onclick="delPark('${k}')">Supprimer</button></div></div>`}).join('')}</details>`;
   return o}
+function seedBranches(pb){
+  if(pb.seeded||S.tree.edges.some(e=>e.to===pb.id&&CATS.includes((nodeOf(e.from)||{}).cat)))return;
+  pb.seeded=true;const br={};
+  CATS.forEach((c,i)=>{const n=addNode('cause',c,pb.x+(i-2.5)*190,pb.y+130);n.cat=c;ensureEdge(n.id,pb.id);br[c]=n});
+  causesOf(pb.id).filter(n=>CATS.includes(n.cat)&&!(n.text===n.cat&&br[n.cat]===n)).forEach(n=>{
+    S.tree.edges=S.tree.edges.filter(e=>!(e.from===n.id&&e.to===pb.id));ensureEdge(n.id,br[n.cat].id);delete n.cat});
+  relayoutAround(pb.id);save()}
 function ph3(){
   autoImportPrio();
+  S.tree.nodes.filter(n=>n.type==='problem').forEach(seedBranches);
   const banners=p3banners();
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
   if(selPb===null&&!SW&&cfg.get('pb'))selPb=cfg.get('pb');
@@ -375,20 +452,16 @@ function ph3(){
   if(!pb)helper='<p class="mut">Ajoutez un nœud « Problème » dans l\'arbre (ou cliquez sur « Mettre à jour la carte » pour importer les problèmes prioritaires) pour analyser ses causes.</p>';
   else{
     helper=`<label>Problème analysé <span class="mut" style="font-weight:400">· vue de la carte</span></label><select onchange="selPb=this.value;selN=new Set();render()" title="Le problème choisi ici est le seul affiché dans la carte">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,60))}</option>`).join('')}</select>`;
-    if(p3m==='why'){const w=S.whys[selPb]||[];
-      helper+=`<p class="sm mut">Remontez la chaîne causale : chaque réponse devient la cause de la précédente.</p>`+[0,1,2,3,4].map(i=>`<label>Pourquoi ? (${i+1}) ${i===0?'':'<span class="mut" style="font-weight:400">– pourquoi la réponse précédente ?</span>'}</label><textarea rows="2" onchange="setWhy(${i},this.value)">${esc(w[i]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendWhys()">Envoyer vers l'arbre</button></div>`;
-    }else{const I=S.ishi[selPb]||{};
-      helper+=`<p class="sm mut">Une cause par ligne dans chaque famille (6M).</p>`+CATS.map(c=>`<label>${c}</label><textarea rows="2" onchange="setIshi('${c.replace(/'/g,"\\'")}',this.value)">${esc(I[c]||'')}</textarea>`).join('')+`<div class="bar"><button class="btn pri" onclick="sendIshi()">Envoyer vers l'arbre</button></div>`+fishSVG(pb.text,I);
-    }
+    helper+='<p class="mut sm">Les 6 composantes du PEV (Ishikawa) sont créées par défaut sous le problème. Sur chaque branche, cliquez sur « + cause » pour ajouter une cause, puis sur « + cause » de cette cause pour la décliner (pourquoi ?), et ainsi de suite jusqu’à la cause racine.</p>';
   }
-  return`${banners}<div class="p3"><aside class="card"><h2>Analyse des causes</h2>
-   <div class="tabs"><button class="${p3m==='why'?'on':''}" onclick="p3m='why';render()">5 Pourquoi</button><button class="${p3m==='ishi'?'on':''}" onclick="p3m='ishi';render()">Ishikawa (6M)</button></div>${helper}</aside>
+  return`${banners}<div class="p3"><aside class="card"><h2>Problème analysé</h2>
+   ${helper}</aside>
   <section class="card"><h2>Arbre à problèmes</h2>
    ${carteBar()}
    ${viewNote()}
    ${repBar()}${repn()==='f'?fishView():treeUI()}</section></div>`;
 }
-function treeUI(){return`   <div class="bar">${treeHelp()}<span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span>${SW?'':'<button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button>'}<button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><button class="btn sm" onclick="foldAll(true)" title="Replie toutes les branches de la vue">⊟ Tout replier</button><button class="btn sm" onclick="foldAll(false)" title="Déplie toutes les branches">⊞ Tout déplier</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadTree()" title="Télécharge l’arbre affiché (avec les branches repliées) en image SVG">Télécharger l’image (SVG)</button><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"><button class="btn sm bad" onclick="clearTree()">Vider</button></div>
+function treeUI(){return`   <div class="bar">${treeHelp()}<span class="sm mut">Lecture :</span><button class="btn sm ${orient()==='v'?'pri':''}" onclick="setOrient('v')" title="Effets en haut, causes en bas">⇅ Verticale</button><button class="btn sm ${orient()==='h'?'pri':''}" onclick="setOrient('h')" title="Causes à gauche, effets à droite">⇄ Horizontale</button><span style="width:12px"></span>${SW?'':'<button class="btn sm pri" onclick="updateMap()" title="Synchronise avec le Sheet, importe les problèmes prioritaires de la phase 2, met à jour les titres et signale ceux qui ne sont plus prioritaires">⟳ Mettre à jour la carte</button>'}<button class="btn sm" onclick="addFree('problem')">＋ Problème</button><button class="btn sm" onclick="addFree('cause')">＋ Cause</button><button class="btn sm" onclick="addFree('effect')">＋ Effet</button><button class="btn sm" onclick="autoLayout();render()">Réorganiser</button><button class="btn sm" onclick="foldAll(true)" title="Replie toutes les branches de la vue">⊟ Tout replier</button><button class="btn sm" onclick="foldAll(false)" title="Déplie toutes les branches">⊞ Tout déplier</button><span class="sp" style="flex:1"></span><button class="btn sm" onclick="downloadTree()" title="Télécharge l’arbre affiché (avec les branches repliées) en image SVG">Télécharger l’image (SVG)</button><button class="btn sm" onclick="exportMM()">Exporter .mm</button><button class="btn sm" onclick="$('#mmIn').click()">Importer .mm</button><input type="file" id="mmIn" accept=".mm,.xml" hidden onchange="importMMFile(this)"></div>
    <div id="cv"><div id="stage" class="or-${orient()}"><svg id="ed"></svg>${vnodes().map(nodeHTML).join('')}</div></div>`}
 /* Lecture de l'arbre : verticale (effets en haut, causes en bas) ou horizontale (causes à gauche, effets à droite).
    C'est une simple vue propre à chaque utilisateur : les positions enregistrées ne changent pas. */
@@ -477,7 +550,7 @@ function mergeCardInto(c){
   N.forEach(n=>{
     const ex=S.tree.nodes.find(m=>!used.has(m.id)&&((n.type==='problem'&&n.pid&&m.pid===n.pid&&m.type==='problem')||key(m)===key(n)));
     if(ex){used.add(ex.id);map[n.id]=ex.id;return}
-    const o={id:uid(),type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};
+    const o={id:uid(),type:n.type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};if(n.cat)o.cat=n.cat;if(o.type==="problem")o.seeded=1;
     if(n.pid&&!S.tree.nodes.some(m=>m.pid===n.pid))o.pid=n.pid;S.tree.nodes.push(o);used.add(o.id);map[n.id]=o.id;added++});
   (c.edges||[]).forEach(e=>{if(map[e.from]&&map[e.to])ensureEdge(map[e.from],map[e.to])});return added}
 function versMain(){
@@ -520,7 +593,7 @@ function copySel(alone){
   if(!base.length){alert('Cliquez d’abord sur un nœud (Maj+clic pour en choisir plusieurs).');return}
   const ids=alone===true?base:[...new Set(base.flatMap(depIds))];
   const idx={};ids.forEach((id,k)=>idx[id]=k);
-  CLIP={src:base,nodes:ids.map(id=>{const n=nodeOf(id);const o={type:n.type,text:n.text,x:n.x,y:n.y};if(n.pid)o.pid=n.pid;return o}),edges:S.tree.edges.filter(e=>idx[e.from]!==undefined&&idx[e.to]!==undefined).map(e=>[idx[e.from],idx[e.to]])};
+  CLIP={src:base,nodes:ids.map(id=>{const n=nodeOf(id);const o={type:n.type,text:n.text,x:n.x,y:n.y};if(n.pid)o.pid=n.pid;if(n.cat)o.cat=n.cat;return o}),edges:S.tree.edges.filter(e=>idx[e.from]!==undefined&&idx[e.to]!==undefined).map(e=>[idx[e.from],idx[e.to]])};
   try{localStorage.setItem('pbs_clip',JSON.stringify(CLIP))}catch(e){}
   CLIPTXT=outline(ids);try{navigator.clipboard.writeText(CLIPTXT).catch(()=>{})}catch(e){}
   setStatus(ids.length+' nœud(s) copié(s)'+(alone===true?' (sélection seule)':' avec leurs dépendants')+' — Ctrl+V pour coller','ok');refreshSel()}
@@ -542,13 +615,19 @@ function pasteClip(mode){
   let g=0;while(clash()&&g<40){dx+=200;g++}
   N.forEach((n,k)=>{if(reuse[k])return;let type=n.type;
     if(target&&type==='problem'){if(mode==='c'&&!hasOut.has(k))type='cause';if(mode==='e'&&!hasIn.has(k))type='effect'}
-    {const o={id:ids[k],type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};if(n.pid&&type==='problem'&&!S.tree.nodes.some(q=>q.pid===n.pid))o.pid=n.pid;if(!target&&VS&&selPb)o.pb=selPb;S.tree.nodes.push(o)}});
+    {const o={id:ids[k],type,text:n.text,x:Math.max(0,n.x+dx),y:Math.max(0,n.y+dy)};if(n.pid&&type==='problem'&&!S.tree.nodes.some(q=>q.pid===n.pid))o.pid=n.pid;if(!target&&VS&&selPb)o.pb=selPb;if(n.cat)o.cat=n.cat;if(o.type==="problem")o.seeded=1;S.tree.nodes.push(o)}});
   CLIP.edges.forEach(e=>ensureEdge(ids[e[0]],ids[e[1]]));
   if(target)N.forEach((n,k)=>{if(mode==='c'&&!hasOut.has(k))ensureEdge(ids[k],target.id);if(mode==='e'&&!hasIn.has(k))ensureEdge(target.id,ids[k])});
   selN=new Set(ids);save();render();
   setStatus(N.length+' nœud(s) collé(s)'+(target?' et rattaché(s) à « '+target.text.slice(0,30)+' »':''),'ok')}
+const isBranch=n=>!!n&&n.type==='cause'&&CATS.includes(n.cat)&&n.text===n.cat;
+const isFixed=n=>!!n&&(n.type==='problem'||isBranch(n));
+const FIXMSG='Le problème principal et les 6 composantes du PEV ne peuvent pas être supprimés.';
 function deleteSel(){
-  const ids=[...selN].filter(nodeOf);if(!ids.length)return;
+  histSnap(true);
+  const all=[...selN].filter(nodeOf);const ids=all.filter(i=>!isFixed(nodeOf(i)));
+  if(all.length>ids.length){selN=new Set(ids);if(!ids.length){alert(FIXMSG);render();return}}
+  if(!ids.length)return;
   if(!confirm('Supprimer '+ids.length+' nœud(s) et leurs liens ? La suppression est partagée avec les autres acteurs.'))return;
   const set=new Set(ids);ids.forEach(id=>{const n=nodeOf(id);if(n.pid&&!SW)S.noImp[n.pid]=1;tomb(id)});
   S.tree.nodes=S.tree.nodes.filter(n=>!set.has(n.id));S.tree.edges=S.tree.edges.filter(e=>!set.has(e.from)&&!set.has(e.to));
@@ -573,12 +652,12 @@ document.addEventListener('paste',e=>{
 /* ---- Arête de poisson (Ishikawa) construite à partir de l'arbre ---- */
 let fishPb=null;
 function fishBones(pbId){
-  const direct=S.tree.edges.filter(e=>e.to===pbId).map(e=>nodeOf(e.from)).filter(Boolean),catOf={};
-  Object.keys(S.map).forEach(k=>{const m=k.match(/^i:([^:]+):([^:]+):/);if(m&&m[1]===pbId)catOf[S.map[k]]=m[2]});
-  const bones=[],used=new Set(),sub=(id,off)=>collect(id,'c').map(x=>({t:x.n.text,d:x.d-1+off}));
-  CATS.forEach(cat=>{const ds=direct.filter(n=>catOf[n.id]===cat);if(!ds.length)return;const items=[];
-    ds.forEach(n=>{used.add(n.id);items.push({t:n.text,d:0});sub(n.id,1).forEach(x=>items.push(x))});bones.push({t:cat,items})});
-  direct.filter(n=>!used.has(n.id)).forEach(n=>bones.push({t:n.text,items:sub(n.id,0)}));
+  const direct=S.tree.edges.filter(e=>e.to===pbId).map(e=>nodeOf(e.from)).filter(Boolean),bones=[];
+  const sub=(id,off)=>collect(id,'c').map(x=>({t:x.n.text,d:x.d-1+off}));
+  CATS.forEach(cat=>{const ds=direct.filter(n=>n.cat===cat);if(!ds.length)return;const items=[];
+    ds.forEach(n=>{if(n.text!==n.cat)items.push({t:n.text,d:0});sub(n.id,n.text!==n.cat?1:0).forEach(x=>items.push(x))});bones.push({t:cat,items})});
+  const rest=direct.filter(n=>!CATS.includes(n.cat));
+  if(rest.length){const items=[];rest.forEach(n=>{items.push({t:n.text,d:0});sub(n.id,1).forEach(x=>items.push(x))});bones.push({t:'À classer',items})}
   return bones}
 function fishDiagram(title,bones,effects){
   const LH=16,slant=70,colW=250,L=24,headW=200,MAXI=14;
@@ -641,7 +720,7 @@ function downloadTree(){
   download('arbre_'+pb.replace(/[^\w]+/g,'_').slice(0,40)+'.svg',svg,'image/svg+xml')}
 function downloadFish(){const pb=nodeOf(fishPb);if(!pb)return;download('ishikawa_'+(pb.text||'probleme').replace(/[^\w]+/g,'_').slice(0,40)+'.svg',fishDiagram(pb.text,fishBones(fishPb),collect(fishPb,'e').map(x=>x.n.text)),'image/svg+xml')}
 function nodeHTML(n){const lab={problem:'Problème',cause:'Cause',effect:'Effet'}[n.type];
-  return`<div class="tn ${n.type}${selN.has(n.id)?' sel':''}${orient()==='v'&&hasFoldC(n)?' hc':''}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" data-act="type" title="Changer le type">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button><button data-act="del" title="Supprimer">✕</button></span></div><div class="tx" contenteditable="true" spellcheck="false" data-act="txt">${esc(n.text)}</div>${foldRow(n)}</div>`}
+  return`<div class="tn ${n.type}${selN.has(n.id)?' sel':''}${orient()==='v'&&hasFoldC(n)?' hc':''}" data-id="${n.id}" style="left:${disp(n)[0]}px;top:${disp(n)[1]}px"><div class="grip"><span class="tl" ${isFixed(n)?'':'data-act="type" '}title="${isFixed(n)?'Nœud fixe':'Changer le type'}">${lab}</span><span><button class="lk" title="Tirer vers un autre nœud : ce nœud en est la cause">⤴</button><button data-act="addc" title="Ajouter une cause sous ce nœud">＋cause</button><button data-act="adde" title="Ajouter un effet au-dessus">＋effet</button>${isFixed(n)?'':'<button data-act="del" title="Supprimer">✕</button>'}</span></div><div class="tx" contenteditable="${isBranch(n)?'false':'true'}" spellcheck="false" ${isBranch(n)?'':'data-act="txt"'}>${esc(n.text)}</div>${foldRow(n)}</div>`}
 function foldRow(n){return foldDirs(n).map(d=>{const c=collect(n.id,d).length;if(!c)return'';const on=FOLD.has(d+':'+n.id),w=d==='c'?(c>1?'causes':'cause'):(c>1?'effets':'effet');
   return`<button class="fd ${d} ${on?'on':''}" data-act="fold" data-dir="${d}" title="${on?'Déplier':'Replier'} : ${c} ${w}${on?' masqué'+(d==='c'?'e':'')+(c>1?'s':''):''} (double clic sur la barre colorée du nœud)">${on?'+'+c:'−'}</button>`}).join('')}
 const hasFoldC=n=>foldDirs(n).includes('c')&&collect(n.id,'c').length>0;
@@ -676,9 +755,9 @@ function initTree(){
     const nd=e.target.closest('.tn'),t=e.target.closest('[data-act]');if(!nd||!t)return;const n=nodeOf(nd.dataset.id),a=t.dataset.act;
     if(a==='type'){if(e.ctrlKey||e.metaKey)return;n.type=n.type==='problem'?'cause':n.type==='cause'?'effect':'problem';save();render()}
     else if(a==='fold'){toggleFold(n.id,t.dataset.dir)}
-    else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);save();render();focusNode(c.id)}
-    else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);save();render();focusNode(c.id)}
-    else if(a==='del'){if(confirm('Supprimer ce nœud et ses liens ?')){if(n.pid&&!SW)S.noImp[n.pid]=1;S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
+    else if(a==='addc'){const c=addNode('cause','Nouvelle cause',n.x,n.y+130);ensureEdge(c.id,n.id);relayoutAround(c.id);save();render();focusNode(c.id)}
+    else if(a==='adde'){const c=addNode('effect','Nouvel effet',n.x,Math.max(10,n.y-130));ensureEdge(n.id,c.id);relayoutAround(c.id);save();render();focusNode(c.id)}
+    else if(a==='del'){if(isFixed(n)){alert(FIXMSG);return}histSnap(true);if(confirm('Supprimer ce nœud et ses liens ?')){if(n.pid&&!SW)S.noImp[n.pid]=1;S.tree.nodes=S.tree.nodes.filter(x=>x.id!==n.id);S.tree.edges=S.tree.edges.filter(x=>x.from!==n.id&&x.to!==n.id);tomb(n.id);save();render()}}
   };
   st.ondblclick=e=>{const nd=e.target.closest('.tn');if(!nd||!e.target.closest('.grip')||e.target.closest('button,.tl'))return;const n=nodeOf(nd.dataset.id);if(n)toggleFold(n.id,n.type==='effect'?'e':'c')};
   st.oninput=e=>{const t=e.target.closest('[data-act="txt"]');if(!t)return;const n=nodeOf(t.closest('.tn').dataset.id);n.text=t.innerText.replace(/\s+/g,' ').trim();drawEdges()};
@@ -715,42 +794,152 @@ function startLink(nd,e){dragging=true;const st=$('#stage'),svg=$('#ed'),id=nd.d
       if(ensureEdge(id,to)){save();render()}}};
   addEventListener('pointermove',mv);addEventListener('pointerup',up);mv(e)}
 function addFree(type){const cv=$('#cv'),[fx,fy]=fromDisp(cv.scrollLeft+40,cv.scrollTop+40);const n=addNode(type,type==='problem'?'Nouveau problème':type==='cause'?'Nouvelle cause':'Nouvel effet',fx,fy);if(type==='problem'&&VS){selPb=n.id;selN=new Set()}else if(VS&&selPb)n.pb=selPb;save();render();focusNode(n.id)}
-function clearTree(){if(confirm("Vider tout l'arbre (nœuds et liens) ?")){S.tree.nodes.forEach(n=>{tomb(n.id);if(n.pid&&!SW)S.noImp[n.pid]=1});S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));S.tree={nodes:[],edges:[]};if(!SW)S.map={};save();render()}}
-function autoLayout(){
-  const N=baseNodes(),NS=new Set(N.map(n=>n.id)),E=S.tree.edges.filter(e=>NS.has(e.from)&&NS.has(e.to));if(!N.length)return;
+function layoutComp(c,E,off){
+  const lvl={},roots=c.filter(i=>nodeOf(i).type==='problem'),q=(roots.length?roots:[c[0]]).slice();q.forEach(i=>lvl[i]=0);
+  while(q.length){const i=q.shift();E.forEach(e=>{
+    if(e.to===i&&lvl[e.from]===undefined&&nodeOf(e.from).type!=='effect'){lvl[e.from]=lvl[i]+1;q.push(e.from)}
+    if(e.from===i&&lvl[e.to]===undefined&&nodeOf(e.to).type!=='cause'){lvl[e.to]=lvl[i]-1;q.push(e.to)}})}
+  c.forEach(i=>{if(lvl[i]===undefined){const t=nodeOf(i).type;lvl[i]=t==='cause'?1:t==='effect'?-1:0}});
+  /* parent de mise en page : le voisin du niveau adjacent (première arête rencontrée) */
+  const ch={},par={};c.forEach(i=>ch[i]=[]);
+  c.slice().sort((a,b)=>nodeOf(a).x-nodeOf(b).x).forEach(i=>{if(lvl[i]===0)return;
+    const cand=E.filter(e=>lvl[i]>0?(e.from===i&&lvl[e.to]===lvl[i]-1):(e.to===i&&lvl[e.from]===lvl[i]+1)).map(e=>lvl[i]>0?e.to:e.from);
+    if(cand.length){cand.sort((a,b)=>nodeOf(a).x-nodeOf(b).x);par[i]=cand[0];ch[cand[0]].push(i)}});
+  const done=new Set(),mn=Math.min(...c.map(i=>lvl[i]));
+  const place=(id,st,side)=>{if(done.has(id))return;done.add(id);const kids=ch[id].filter(k=>!done.has(k)&&(side===0||Math.sign(lvl[k])===side));
+    let tot=0;const ws=kids.map(k=>{const w=wd2(k);tot+=w;return w});
+    const n=nodeOf(id);n.y=40+(lvl[id]-mn)*130;n.x=Math.round(st+(Math.max(1,tot)-1)*100);
+    let cur=st;kids.forEach((k,x)=>{place(k,cur,0);cur+=ws[x]*200})};
+  const memo={};const wd2=id=>{if(memo[id]!==undefined)return memo[id];memo[id]=1;let t=0;ch[id].forEach(k=>{t+=wd2(k)});return memo[id]=Math.max(1,t)};
+  let cx=off;
+  const top=c.filter(i=>par[i]===undefined).sort((a,b)=>(lvl[a]-lvl[b])||(nodeOf(a).x-nodeOf(b).x));
+  top.forEach(r=>{
+    if(lvl[r]===0){
+      const up=ch[r].filter(k=>lvl[k]<0),dn=ch[r].filter(k=>lvl[k]>0);
+      const wU=up.reduce((t,k)=>t+wd2(k),0),wD=dn.reduce((t,k)=>t+wd2(k),0),Wt=Math.max(1,wU,wD);
+      done.add(r);const n=nodeOf(r);n.y=40+(0-mn)*130;n.x=Math.round(cx+(Wt-1)*100);
+      let a=cx+(Wt-wD)*100;dn.forEach(k=>{place(k,a,0);a+=wd2(k)*200});
+      a=cx+(Wt-wU)*100;up.forEach(k=>{place(k,a,0);a+=wd2(k)*200});
+      cx+=Wt*200}
+    else{const w=wd2(r);place(r,cx,0);cx+=w*200}});
+  c.forEach(i=>{if(!done.has(i)){nodeOf(i).x=cx;nodeOf(i).y=40+(lvl[i]-mn)*130;cx+=200}});
+  return cx-off}
+function compsOf(N,E){
   const adj={};N.forEach(n=>adj[n.id]=[]);E.forEach(e=>{if(adj[e.from]&&adj[e.to]){adj[e.from].push(e.to);adj[e.to].push(e.from)}});
   const seen=new Set(),comps=[];
   N.forEach(n=>{if(seen.has(n.id))return;const c=[],q=[n.id];seen.add(n.id);while(q.length){const i=q.shift();c.push(i);adj[i].forEach(j=>{if(!seen.has(j)){seen.add(j);q.push(j)}})}comps.push(c)});
-  let off=40;
-  comps.forEach(c=>{
-    const lvl={},roots=c.filter(i=>nodeOf(i).type==='problem'),q=(roots.length?roots:[c[0]]).slice();q.forEach(i=>lvl[i]=0);
-    while(q.length){const i=q.shift();E.forEach(e=>{
-      if(e.to===i&&lvl[e.from]===undefined&&nodeOf(e.from).type!=='effect'){lvl[e.from]=lvl[i]+1;q.push(e.from)}
-      if(e.from===i&&lvl[e.to]===undefined&&nodeOf(e.to).type!=='cause'){lvl[e.to]=lvl[i]-1;q.push(e.to)}})}
-    c.forEach(i=>{if(lvl[i]===undefined){const t=nodeOf(i).type;lvl[i]=t==='cause'?1:t==='effect'?-1:0}});
-    const by={};c.forEach(i=>(by[lvl[i]]=by[lvl[i]]||[]).push(i));
-    const lv=Object.keys(by).map(Number),mn=Math.min(...lv),wmax=Math.max(...lv.map(l=>by[l].length))*200;
-    lv.forEach(l=>{const g=by[l].sort((a,b)=>nodeOf(a).x-nodeOf(b).x),st=off+(wmax-g.length*200)/2;g.forEach((id,k)=>{const n=nodeOf(id);n.x=Math.round(st+k*200);n.y=40+(l-mn)*130})});
-    off+=wmax+80});
+  return comps}
+function autoLayout(){
+  const N=baseNodes(),NS=new Set(N.map(n=>n.id)),E=S.tree.edges.filter(e=>NS.has(e.from)&&NS.has(e.to));if(!N.length)return;
+  let off=40;compsOf(N,E).forEach(c=>{off+=layoutComp(c,E,off)+80});
   save();
 }
-function setWhy(i,v){const a=S.whys[selPb]=S.whys[selPb]||['','','','',''];a[i]=v;save()}
-function sendWhys(){const pb=nodeOf(selPb),arr=S.whys[selPb]||[];let prev=pb,c=0;
-  arr.forEach((t,i)=>{t=(t||'').trim();if(!t)return;const key=`w:${selPb}:${i}`;let n=nodeOf(S.map[key]);
-    if(n)n.text=t;else{n=addNode('cause',t,prev.x,prev.y+130);S.map[key]=n.id}ensureEdge(n.id,prev.id);prev=n;c++});
-  if(c){save();autoLayout();render()}else alert('Renseignez au moins un « Pourquoi ».')}
-function setIshi(c,v){const o=S.ishi[selPb]=S.ishi[selPb]||{};o[c]=v;save()}
-function sendIshi(){const pb=nodeOf(selPb),I=S.ishi[selPb]||{};let c=0;
-  CATS.forEach(cat=>(I[cat]||'').split('\n').map(s=>s.trim()).filter(Boolean).forEach(t=>{const key=`i:${selPb}:${cat}:${t}`;if(nodeOf(S.map[key]))return;const n=addNode('cause',t,pb.x,pb.y+130);S.map[key]=n.id;ensureEdge(n.id,pb.id);c++}));
-  if(c){save();autoLayout();render()}else alert('Aucune nouvelle cause à envoyer.')}
-function fishSVG(title,I){
-  const W=720,H=330;let s=`<svg viewBox="0 0 ${W} ${H}" class="fish" font-family="system-ui" font-size="10"><line x1="20" y1="165" x2="590" y2="165" stroke="#374151" stroke-width="3"/><rect x="590" y="140" width="125" height="50" rx="8" fill="#fee2e2" stroke="#dc2626"/>`;
-  const words=(title||'').split(' ');let ln=[''];words.forEach(w=>{if((ln[ln.length-1]+' '+w).length>20)ln.push(w);else ln[ln.length-1]+=' '+w});
-  ln.slice(0,3).forEach((t,i)=>s+=`<text x="652" y="${160+i*12}" text-anchor="middle" fill="#7f1d1d">${esc(t.trim().slice(0,22))}</text>`);
-  CATS.forEach((c,k)=>{const top=k<3,x=120+(k%3)*170,y0=top?30:300;
-    s+=`<line x1="${x}" y1="${y0}" x2="${x+60}" y2="165" stroke="#6b7280" stroke-width="2"/><text x="${x-4}" y="${top?20:318}" font-weight="700" font-size="11" fill="#0f766e">${esc(c)}</text>`;
-    (I[c]||'').split('\n').map(t=>t.trim()).filter(Boolean).slice(0,6).forEach((t,i)=>{const yy=top?48+i*16:282-i*16,xx=x+(yy-y0)*(60/(165-y0));s+=`<text x="${xx+6}" y="${yy}" fill="#374151">${esc(t.slice(0,26))}</text>`})});
-  return s+'</svg>'}
+/* remet en ordre (centré) uniquement l'arbre qui contient ce nœud, sans bouger le coin supérieur gauche */
+function relayoutAround(id){
+  const N=S.tree.nodes,NS=new Set(N.map(n=>n.id)),E=S.tree.edges.filter(e=>NS.has(e.from)&&NS.has(e.to));
+  const c=compsOf(N,E).find(c=>c.includes(id));if(!c)return;
+  const x0=Math.min(...c.map(i=>nodeOf(i).x));layoutComp(c,E,Math.max(0,x0))}
+/* ---- Historique local et récupération (les nœuds restaurés reçoivent de nouveaux identifiants : les suppressions déjà partagées ne les effacent pas) ---- */
+const HKEY='pbs_hist';let LASTH=0;
+const PKEYS=['tree','cartes','obj','actions','problems','matrix','mts','sel','ign','keep','parked','swot','logframe','pdca'];
+function pick(X){const o={};PKEYS.forEach(k=>{if(X[k]!==undefined)o[k]=X[k]});return o}
+function histGet(){try{return JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(e){return[]}}
+function histSnap(force){
+  const t=Date.now();if(!force&&t-LASTH<30000)return;
+  withMain(()=>{
+    const cartes=S.cartes||{};if(!S.tree.nodes.length&&!Object.keys(cartes).length&&!(S.problems||[]).length)return;
+    const snap=Object.assign({ts:t},pick(S)),js=JSON.stringify(snap),h=histGet();
+    if(h.length){const a=Object.assign({},h[0]);delete a.ts;const b=Object.assign({},snap);delete b.ts;if(JSON.stringify(a)===JSON.stringify(b))return}
+    h.unshift(JSON.parse(js));LASTH=t;
+    let k=Math.min(h.length,20);
+    while(k>0){try{localStorage.setItem(HKEY,JSON.stringify(h.slice(0,k)));break}catch(e){k=Math.floor(k/2)}}})}
+function reviveTree(t,map){
+  const nodes=(t.nodes||[]).map(n=>{const o=JSON.parse(JSON.stringify(n));o.id=map[n.id]=uid();return o});
+  nodes.forEach(o=>{if(o.pb&&map[o.pb])o.pb=map[o.pb]});
+  return{nodes,edges:(t.edges||[]).filter(e=>map[e.from]&&map[e.to]).map(e=>({from:map[e.from],to:map[e.to]}))}}
+function restoreData(src){
+  withMain(()=>{
+    const map={};
+    (S.problems||[]).forEach(p=>tomb(p.id));
+    S.tree.nodes.forEach(n=>tomb(n.id));S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));
+    const base=src.tree||{nodes:[],edges:[]};
+    (src.tree&&src.tree.nodes||[]).forEach(n=>{map[n.id]=uid()});
+    const ids=Object.assign({},map),pm={};
+    const hasP=Array.isArray(src.problems)&&src.problems.length>0;
+    if(hasP)src.problems.forEach(p=>{pm[p.id]=uid()});
+    const mk=(t)=>{const nodes=(t.nodes||[]).map(n=>{const o=JSON.parse(JSON.stringify(n));if(!ids[n.id])ids[n.id]=uid();o.id=ids[n.id];if(o.pid&&pm[o.pid])o.pid=pm[o.pid];return o});
+      nodes.forEach(o=>{if(o.pb&&ids[o.pb])o.pb=ids[o.pb]});
+      return{nodes,edges:(t.edges||[]).filter(e=>ids[e.from]&&ids[e.to]).map(e=>({from:ids[e.from],to:ids[e.to]}))}};
+    const t=mk(base);
+    Object.keys(S.cartes||{}).forEach(k=>tomb('carte:'+k));
+    const cs={};Object.values(src.cartes||{}).forEach(c=>{const r=mk(c);cs[uid()]=Object.assign({},c,{nodes:r.nodes,edges:r.edges,ts:Date.now(),by:cfg.get('author')||c.by||''})});
+    const ob={};Object.keys(src.obj||{}).forEach(k=>{if(ids[k])ob[ids[k]]=src.obj[k]});
+    const ac=(src.actions||[]).map(a=>Object.assign({},a,{obj:a.obj&&ids[a.obj]?ids[a.obj]:a.obj}));
+    S.tree=t;S.cartes=cs;S.obj=ob;S.actions=ac;S.noImp={};S.map={};
+    if(hasP){
+      const rk=o=>{const r={};Object.keys(o||{}).forEach(k=>{const m=k.split('|').map(x=>pm[x]);if(m.every(Boolean))r[m.join('|')]=o[k]});return r};
+      const rv=o=>{const r={};Object.keys(o||{}).forEach(k=>{if(pm[k])r[pm[k]]=o[k]});return r};
+      S.problems=src.problems.map(p=>Object.assign({},JSON.parse(JSON.stringify(p)),{id:pm[p.id]}));
+      S.matrix=rk(src.matrix);S.mts=rk(src.mts);S.sel=rv(src.sel);S.ign=rv(src.ign);S.keep=rv(src.keep);S.parked=rv(src.parked);
+      S.swot=(src.swot||[]).map(x=>Object.assign({},x,{id:uid()}));
+      if(src.logframe)S.logframe=src.logframe;if(src.pdca)S.pdca=src.pdca;
+      S.sel=S.sel||{};S.selReset=Date.now()}
+  });
+  ACT=null;cfg.set('carte','');selPb=null;selN=new Set();if(RECUP)cfg.set('auto','1');save();render();closeHist()}
+function histOpen(){histRender();$('#hist').showModal()}
+function closeHist(){try{$('#hist').close()}catch(e){}}
+function histRender(){
+  const h=histGet();
+  $('#histList').innerHTML=h.length?h.map((x,i)=>`<li><span>${new Date(x.ts).toLocaleString('fr-FR')} · ${(x.problems||[]).length} problème(s) · ${(x.tree.nodes||[]).length} nœud(s) · ${Object.keys(x.cartes||{}).length} feuille(s)</span> <button class="btn sm" onclick="histRestore(${i})">Restaurer</button></li>`).join(''):'<li class="mut">Aucune sauvegarde locale pour le moment : elles se créent automatiquement à chaque modification.</li>'}
+function histRestore(i){const x=histGet()[i];if(!x)return;if(!confirm('Remplacer la carte actuelle par cette sauvegarde ?'))return;restoreData(x)}
+async function histFromSheet(){
+  const url=cfg.get('url');if(!url){alert('Aucune liaison Google Sheet configurée.');return}
+  if(!confirm('Remplacer la carte actuelle par le contenu actuel du Google Sheet ?'))return;
+  try{const tok=encodeURIComponent(cfg.get('token')),sep=url.includes('?')?'&':'?';
+    const r=await readJSON(await fetch(url+sep+'action=load&token='+tok));if(!r.ok||!r.state)throw new Error(r.error||'aucune donnée dans le Sheet');
+    const X=normalize(r.state);if(!X.tree.nodes.length&&!Object.keys(X.cartes||{}).length){alert('Le Google Sheet ne contient aucun nœud.');return}
+    cfg.set('auto','1');restoreData(pick(X));setTimeout(()=>syncNow(false),300)}
+  catch(e){alert('Récupération impossible : '+niceErr(e))}}
+/* ---- Analyse des causes : composantes du PEV (Ishikawa) puis « Pourquoi ? » successifs, directement dans l'arbre ---- */
+let WHYOPEN=null,catState={};
+const causesOf=id=>S.tree.edges.filter(e=>e.to===id).map(e=>nodeOf(e.from)).filter(n=>n&&n.type==='cause');
+const inCats=n=>CATS.includes(n.cat);
+function countDeep(id){const s=new Set([id]);(function go(i){causesOf(i).forEach(c=>{if(!s.has(c.id)){s.add(c.id);go(c.id)}})})(id);return s.size-1}
+function causeRows(n,d,seen){
+  if(seen.has(n.id))return'';const s2=new Set(seen);s2.add(n.id);
+  const kids=causesOf(n.id),lv=d===0?'Cause':'Pourquoi '+(d+1),root=d>=4;
+  let o=`<div class="cz" style="margin-left:${Math.min(d,7)*13}px"><span class="lv ${root?'rt':''}" title="${root?'Cinquième niveau : cause racine probable':d===0?'Cause directe':'Réponse au pourquoi précédent'}">${lv}</span><textarea rows="${Math.max(1,Math.ceil((n.text||'').length/(36-Math.min(d,5)*3)))}" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'" onchange="setCause('${n.id}',this.value)">${esc(n.text)}</textarea><button class="mini" title="Pourquoi ? Chercher les causes de cette cause" onclick="askWhy('${n.id}')">Pourquoi ?${kids.length?' ('+kids.length+')':''}</button><button class="mini" title="Supprimer" onclick="delCause('${n.id}')">✕</button></div>`;
+  kids.forEach(k=>{o+=causeRows(k,d+1,s2)});
+  if(WHYOPEN===n.id)o+=`<div class="cz" style="margin-left:${Math.min(d+1,7)*13}px"><span class="lv">Pourquoi ${d+2}</span><input class="whyin" id="whyin" placeholder="Pourquoi « ${esc((n.text||'').slice(0,30))} » ? (Entrée, puis Échap)" onkeydown="whyKey(event,'${n.id}')"></div>`;
+  return o}
+function causeHelper(pb){
+  const direct=causesOf(pb.id),done=direct.filter(inCats),todo=direct.filter(n=>!inCats(n));
+  let o=`<p class="sm mut" style="margin:6px 0"><b>① Causes par composante du PEV</b> (Ishikawa) puis <b>② approfondissez</b> : « Pourquoi ? » sous chaque cause, autant de fois que nécessaire, jusqu’à la cause racine. Tout s’inscrit directement dans l’arbre.</p>`;
+  if(todo.length)o+=`<div class="cz2"><b class="sm">À classer (${todo.length})</b> <span class="mut sm">— causes déjà dans l’arbre sans composante</span>${todo.map(n=>`<div class="cz"><textarea rows="1" onchange="setCause('${n.id}',this.value)">${esc(n.text)}</textarea><select class="mini" onchange="setCat('${n.id}',this.value)"><option value="">Classer dans…</option>${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>`).join('')}</div>`;
+  o+=CATS.map(c=>{const items=done.filter(n=>n.cat===c),deep=items.reduce((s,n)=>s+countDeep(n.id),0);
+    const open=catState[c]!==undefined?catState[c]:items.length>0;
+    return`<details class="cat" ${open?'open':''} ontoggle="catState['${c}']=this.open"><summary><b>${c}</b> <span class="pill ${items.length?'g':''}">${items.length}${deep?' + '+deep:''}</span></summary><div class="sm mut" style="margin:2px 0 4px">${CATHINT[c]}</div>
+      ${items.map(n=>causeRows(n,0,new Set([pb.id]))).join('')}
+      <input class="whyin" data-cat="${c}" placeholder="＋ Ajouter une cause (${c}) — Entrée" onkeydown="if(event.key==='Enter')addCause('${c}',this)"></details>`}).join('');
+  return o}
+function newCause(text,parent,cat){
+  const sib=causesOf(parent.id).length,n=addNode('cause',text,parent.x+sib*190,parent.y+130);if(cat)n.cat=cat;ensureEdge(n.id,parent.id);return n}
+function addCause(cat,el){const t=el.value.trim(),pb=nodeOf(selPb);if(!t||!pb)return;
+  if(causesOf(pb.id).some(n=>n.cat===cat&&(n.text||'').trim().toLowerCase()===t.toLowerCase())){el.value='';return}
+  newCause(t,pb,cat);catState[cat]=true;WHYOPEN=null;save();render();const i=document.querySelector('.whyin[data-cat="'+cat+'"]');if(i)i.focus()}
+function askWhy(id){WHYOPEN=WHYOPEN===id?null:id;render();const i=$('#whyin');if(i)i.focus()}
+function whyKey(e,id){
+  if(e.key==='Escape'){WHYOPEN=null;render();return}
+  if(e.key!=='Enter')return;const t=e.target.value.trim(),par=nodeOf(id);if(!t||!par)return;
+  if(causesOf(id).some(n=>(n.text||'').trim().toLowerCase()===t.toLowerCase())){e.target.value='';return}
+  newCause(t,par,null);save();render();const i=$('#whyin');if(i)i.focus()}
+function setCause(id,v){const n=nodeOf(id);if(!n)return;v=v.trim();if(!v){delCause(id);return}n.text=v;save();const el=document.querySelector('#stage .tn[data-id="'+id+'"] .tx');if(el)el.textContent=v}
+function setCat(id,c){const n=nodeOf(id);if(!n||!c)return;n.cat=c;catState[c]=true;save();render()}
+function delCause(id){
+  const n=nodeOf(id);if(!n||isFixed(n))return;const D=new Set([id]);(function go(i){causesOf(i).forEach(c=>{if(!D.has(c.id)){D.add(c.id);go(c.id)}})})(id);
+  let ch=true;while(ch){ch=false;[...D].forEach(x=>{if(x!==id&&S.tree.edges.some(e=>e.from===x&&!D.has(e.to))){D.delete(x);ch=true}})}
+  if(D.size>1||(n.text||'').trim()){if(!confirm(D.size>1?'Supprimer « '+n.text.slice(0,50)+' » et ses '+(D.size-1)+' sous-cause(s) ? La suppression est partagée avec les autres acteurs.':'Supprimer « '+n.text.slice(0,50)+' » ? La suppression est partagée avec les autres acteurs.'))return}
+  D.forEach(x=>tomb(x));S.tree.nodes=S.tree.nodes.filter(m=>!D.has(m.id));S.tree.edges=S.tree.edges.filter(e=>!D.has(e.from)&&!D.has(e.to));selN=new Set([...selN].filter(x=>!D.has(x)));if(WHYOPEN&&D.has(WHYOPEN))WHYOPEN=null;save();render()}
 
 /* --- Export / import FreeMind (.mm) --- */
 function download(name,txt,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:type||'text/plain'}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
@@ -775,7 +964,7 @@ function exportMM(){
   const cols={problem:'#fecaca',cause:'#fed7aa',effect:'#bfdbfe',root:'#e5e7eb'};
   function ser(o,depth,rootLevel){const n=o.n;
     let s=`<node ID="ID_${n.id}" TEXT="${esc(n.text).replace(/\n/g,' ')}" BACKGROUND_COLOR="${cols[n.type]}"${o.pos&&depth===1&&top===roots[0]&&roots.length===1?` POSITION="${o.pos}"`:''}>`;
-    s+=`<attribute NAME="type" VALUE="${n.type}"/>`;if(n.pid)s+=`<attribute NAME="pid" VALUE="${n.pid}"/>`;
+    s+=`<attribute NAME="type" VALUE="${n.type}"/>`;if(n.pid)s+=`<attribute NAME="pid" VALUE="${n.pid}"/>`;if(n.cat)s+=`<attribute NAME="cat" VALUE="${esc(n.cat)}"/>`;
     (extra[n.id]||[]).forEach(t=>s+=`<arrowlink DESTINATION="ID_${t}"/>`);
     o.kids.forEach(k=>s+=ser(k,depth+1));return s+'</node>'}
   const xml=`<map version="1.0.1">\n${ser(top,0)}\n</map>`;
@@ -794,7 +983,7 @@ function importMM(xml){
     if(!synthetic){let t=rt;
       if(!t){if(!parent)t='problem';else if(parent.type==='root')t='problem';else if(parent.type==='problem')t=el.getAttribute('POSITION')==='left'?'effect':'cause';else t=parent.type}
       me={id:fix(el.getAttribute('ID')),type:t,text:(el.getAttribute('TEXT')||'').trim()||'(sans texte)',x:0,y:0};
-      const pid=attr(el,'pid');if(pid&&S.problems.some(p=>p.id===pid))me.pid=pid;
+      const pid=attr(el,'pid');if(pid&&S.problems.some(p=>p.id===pid))me.pid=pid;const cat=attr(el,'cat');if(cat&&CATS.includes(cat))me.cat=cat;if(me.type==="problem")me.seeded=1;
       nodes.push(me);idMap[el.getAttribute('ID')]=me.id;
       if(parent&&parent.type!=='root'){if(me.type==='effect')edges.push({from:parent.id,to:me.id});else edges.push({from:me.id,to:parent.id})}
       [...el.children].filter(c=>c.tagName==='arrowlink').forEach(a=>arrows.push([me.id,a.getAttribute('DESTINATION')]))}
@@ -805,7 +994,7 @@ function importMM(xml){
   const keepIds=new Set(nodes.map(n=>n.id));S.tree.nodes.forEach(n=>{if(!keepIds.has(n.id))tomb(n.id)});nodes.forEach(n=>{delete S.tomb[n.id]});S.tree={nodes,edges};S.map={};autoLayout();save();render();
 }
 function exportJSON(){download((S.title||'analyse').replace(/[^\w\-]+/g,'_')+'.json',JSON.stringify(S,null,1),'application/json')}
-$('#jsonIn').onchange=function(){const f=this.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{S=normalize(JSON.parse(r.result));persist();render()}catch(e){alert('Fichier JSON invalide')}this.value=''};r.readAsText(f)};
+$('#jsonIn').onchange=function(){const f=this.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const X=normalize(JSON.parse(r.result));S=X;unswap();SW=false;MAINT=null;ACT=null;restoreData(pick(X))}catch(e){alert('Fichier JSON invalide')}this.value=''};r.readAsText(f)};
 
 /* ---------- Phase 4 : Objectifs, actions, impact/effort ---------- */
 const INV=[
@@ -910,11 +1099,13 @@ function buildTables(){
   T['2_Matrice']=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(Pr.map((a,i)=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))));
   T['2_Pareto']=[['Rang','ID','Problème','Exercée','Reçue','Gravité','Score','%','% cumulé','Rôle','Prioritaire']].concat(rows.map((r,k)=>[k+1,'P'+(r.i+1),r.p.t,r.act,r.pas,r.g,r.score,+r.pct.toFixed(1),+r.cum.toFixed(1),r.role,r.prio?'Oui':'Non']));
   const typ={problem:'Problème',cause:'Cause',effect:'Effet'},tx=id=>(nodeOf(id)||{}).text||'';
+  if(S.swot.length)T['1_SWOT']=[['Catégorie','Élément','Auteur','Problème lié']].concat(['S','W','O','T'].flatMap(k=>S.swot.filter(x=>x.q===k).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(x=>{const pr=x.pid&&S.problems.find(p=>p.id===x.pid);return[SWQ[k][0],x.t,x.by||'',pr?'P'+(S.problems.indexOf(pr)+1)+' – '+pr.t:'']})));
   if(Object.keys(S.cartes||{}).length)T['3_Cartes']=[['Carte','Type','Texte','Auteur','Modifiée']].concat(Object.values(S.cartes).sort((a,b)=>(a.name||'').localeCompare(b.name||'')).flatMap(c=>(c.nodes||[]).map(n=>[c.name,({problem:'Problème',cause:'Cause',effect:'Effet'})[n.type]||n.type,n.text,c.by||'',c.ts?new Date(c.ts).toLocaleString('fr-FR'):''])));
   T['3_Arbre']=[['ID','Type','Texte','Est cause de (liens)']].concat(S.tree.nodes.map(n=>[n.id,typ[n.type],n.text,S.tree.edges.filter(e=>e.from===n.id).map(e=>tx(e.to)).join(' ; ')]));
-  const ac=[['Problème','Méthode','Famille / niveau','Cause']];
-  Object.keys(S.whys).forEach(k=>(S.whys[k]||[]).forEach((t,i)=>{if(t)ac.push([tx(k),'5 Pourquoi','Pourquoi '+(i+1),t])}));
-  Object.keys(S.ishi).forEach(k=>CATS.forEach(c=>((S.ishi[k]||{})[c]||'').split('\n').filter(Boolean).forEach(t=>ac.push([tx(k),'Ishikawa',c,t]))));
+  const ac=[['Problème','Composante PEV','Niveau','Cause','Cause de']];
+  S.tree.nodes.filter(n=>n.type==='problem').forEach(pb=>{(function go(par,d,cat,seen){causesOf(par.id).forEach(c=>{if(seen.has(c.id))return;const s2=new Set(seen);s2.add(c.id);
+    if(d===0&&CATS.includes(c.cat)){go(c,0,c.cat,s2);return}
+    const ct=d===0?'À classer':cat;ac.push([pb.text,ct,d===0?'Cause':'Pourquoi '+(d+1),c.text,par.text]);go(c,d+1,ct,s2)})})(pb,0,'',new Set([pb.id]))});
   T['3_Analyse_causes']=ac;
   const ob={problem:'Objectif central',cause:'Moyen',effect:'Fin'};
   T['4_Objectifs']=[['Type','Problème d\'origine','Objectif']].concat(S.tree.nodes.map(n=>[ob[n.type],n.text,(S.obj[n.id]||{}).t||'']));
@@ -1007,12 +1198,13 @@ function mergeState(L,R){
   M.tree.edges=union(R.tree.edges,L.tree.edges,e=>e.from+'>'+e.to).filter(e=>nid.has(e.from)&&nid.has(e.to)&&!dead('e:'+e.from+'>'+e.to));
   M.cartes={};new Set([...Object.keys(R.cartes||{}),...Object.keys(L.cartes||{})]).forEach(k=>{const a=(L.cartes||{})[k],b=(R.cartes||{})[k],o=!a?b:!b?a:((a.ts||0)>=(b.ts||0)?a:b);
     if(o&&(o.ts||0)>(M.tomb['carte:'+k]||0))M.cartes[k]=o});
+  M.swot=union(R.swot,L.swot,x=>x.id,'ts').filter(x=>!dead(x.id));
   M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   dedupeState(M);
   return M}
-const sigOf=s=>JSON.stringify([s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
+const sigOf=s=>JSON.stringify([s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.swot,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
 const sig=()=>sigOf(S);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
@@ -1067,9 +1259,11 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cfg.get('
 /* à la fermeture de la page : envoi de secours des dernières modifications */
 addEventListener('pagehide',()=>{if(!PEND||KNOWN===null||!cfg.get('url'))return;try{let b;withMain(()=>{b=JSON.stringify({action:'save',token:cfg.get('token'),baseRev:KNOWN,state:S})});navigator.sendBeacon(cfg.get('url'),b)}catch(e){}});
 
+const RECUP=location.hash==='#recup';if(RECUP)cfg.set('auto','0');
 render();
 if(!cfg.get('author'))setTimeout(openCfg,400);
-if(cfg.get('url')){setStatus('Connexion au Google Sheet…');syncNow(true)}
+if(RECUP){setStatus('Mode récupération : synchronisation automatique suspendue','bad');setTimeout(histOpen,300)}
+else if(cfg.get('url')){setStatus('Connexion au Google Sheet…');syncNow(true)}
 </script>
 </body>
 </html>
