@@ -53,6 +53,12 @@ th,td{border:1px solid var(--line);padding:5px 7px;text-align:left;vertical-alig
 th{background:#f1f5f9;font-size:12px}
 .tw{overflow:auto;max-width:100%}
 td.mc{padding:0;text-align:center;width:38px;min-width:38px}
+.mxw{max-height:72vh}
+table.mx th{background:#f3f4f6}
+table.mx tr:first-child th{position:sticky;top:0;z-index:2}
+table.mx tr>th:first-child{position:sticky;left:0;z-index:1;background:#f3f4f6;box-shadow:2px 0 0 #d1d5db}
+table.mx tr:first-child>th:first-child{z-index:3}
+td.mc button:disabled{opacity:.85}
 td.mc button{width:100%;height:30px;border:0;cursor:pointer;background:#fff;font-weight:700}
 td.mc .w1{background:#fef3c7}td.mc .w2{background:#fdba74}td.mc .w3{background:#f87171;color:#fff}
 td.diag{background:#e5e7eb}
@@ -188,8 +194,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ---------- État ---------- */
 function blank(){return{v:1,title:'Mon analyse',updated:0,problems:[],matrix:{},sel:{},
-  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{},cartes:{},swot:[]}}
-function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});return s}
+  tree:{nodes:[],edges:[]},whys:{},ishi:{},map:{},obj:{},actions:[],logframe:[],pdca:{},tomb:{},mts:{},ign:{},selReset:0,noImp:{},parked:{},keep:{},cartes:{},swot:[],groups:{n:0,names:{},assign:{},ts:0},gdone:{}}}
+function normalize(x){const b=blank();const s=Object.assign(b,x||{});s.tree=Object.assign({nodes:[],edges:[]},s.tree||{});s.groups=Object.assign({n:0,names:{},assign:{},ts:0},s.groups||{});s.gdone=s.gdone||{};return s}
 let S=(()=>{try{return normalize(JSON.parse(localStorage.getItem('pbs_state')))}catch(e){return blank()}})();
 let P=(()=>{try{return +localStorage.getItem('pbs_phase')||1}catch(e){return 1}})();
 let selP=null,selPb=null,p4='obj',p5='lf';
@@ -329,17 +335,71 @@ function paretoSVG(rows){
   s+=`<polyline points="${pts}" fill="none" stroke="#1d4ed8" stroke-width="2"/>`+rows.map((r,i)=>`<circle cx="${L+i*bw+bw/2}" cy="${T+h*(1-r.cum/100)}" r="3.5" fill="#1d4ed8"/>`).join('');
   return s+'</svg>';
 }
-function cyc(a,b){const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;S.matrix[k]=v;S.mts[k]=Date.now();S.sel={};S.selReset=Date.now();save();render()}
+function cyc(a,b){if(!canEdit(a))return;const k=a+'|'+b,v=((+S.matrix[k]||0)+1)%4;S.matrix[k]=v;S.mts[k]=Date.now();S.sel={};S.selReset=Date.now();save();render()}
 function setSel(id,v){S.sel[id]={v:!!v,ts:Date.now(),by:cfg.get('author')||''};save();render()}
+/* ---- Travail en groupes (phase 2) : les lignes de la matrice sont réparties entre les groupes ---- */
+const gOn=()=>S.groups&&S.groups.n>0;
+const gName=g=>(S.groups.names&&S.groups.names[g])||('Groupe '+g);
+const myGrp=()=>cfg.get('grp')||'';
+const grpOf=id=>+(S.groups.assign||{})[id]||0;
+function canEdit(a){if(!gOn())return true;const m=myGrp();return !!m&&m!=='all'&&grpOf(a)===+m}
+function gRowsOf(g){return S.problems.map((p,i)=>({p,i})).filter(x=>grpOf(x.p.id)===g)}
+function gLinks(g){const ids=new Set(gRowsOf(g).map(x=>x.p.id));let n=0;for(const k in S.matrix){if((+S.matrix[k]||0)>0&&ids.has(k.split('|')[0]))n++}return n}
+function gIsDone(g){const d=S.gdone[g];return !!(d&&d.v)}
+let GOPEN=false;
+function gTouch(){S.groups.ts=Date.now()}
+function gSetN(n){n=Math.max(0,Math.min(60,Math.floor(+n)||0));const G=S.groups;G.n=n;Object.keys(G.assign).forEach(k=>{if(G.assign[k]>n)G.assign[k]=0});gTouch();
+  if(n&&!Object.values(G.assign).some(v=>v))gAssign('alt',true);else{save();render()}}
+function gAssign(mode,quiet){const G=S.groups,n=G.n,P=S.problems;if(!n)return;
+  if(!quiet&&Object.values(G.assign).some(v=>v)&&!confirm('Refaire la répartition ? Les lignes déjà saisies restent dans la matrice, mais changent peut-être de groupe.'))return;
+  const as={};
+  if(mode==='alt')P.forEach((p,i)=>{as[p.id]=i%n+1});
+  else if(mode==='blk'){const sz=Math.ceil(P.length/n);P.forEach((p,i)=>{as[p.id]=Math.min(n,Math.floor(i/sz)+1)})}
+  else{const by={};P.forEach(p=>{const k=(p.by||'—').trim()||'—';(by[k]=by[k]||[]).push(p)});
+    const load=Array(n).fill(0);Object.values(by).sort((a,b)=>b.length-a.length).forEach(L=>{let g=0;for(let j=1;j<n;j++)if(load[j]<load[g])g=j;load[g]+=L.length;L.forEach(p=>{as[p.id]=g+1})})}
+  G.assign=as;gTouch();save();render()}
+function gMove(pid,g){S.groups.assign[pid]=+g;gTouch();save();render()}
+function gRename(g,v){S.groups.names[g]=v.trim();gTouch();save()}
+function gOff(){if(!confirm('Désactiver le travail en groupes ? La matrice redevient complète et modifiable par tous. Les liens déjà saisis sont conservés.'))return;S.groups.n=0;gTouch();save();render()}
+function gChoose(v){cfg.set('grp',v);render()}
+function gToggleDone(g){const d=!gIsDone(g);S.gdone[g]={v:d,ts:Date.now(),by:cfg.get('author')||''};save();render()}
+function gPanel(){
+  const G=S.groups,P=S.problems,un=P.filter(p=>!grpOf(p.id)).length;
+  const bys=[...new Set(P.map(p=>(p.by||'').trim()).filter(Boolean))].length;
+  let h=`<div class="card"><h2>Répartition en groupes</h2><p class="mut">Chaque groupe saisit uniquement les <b>lignes</b> qui lui sont attribuées ; il compare chacune à <b>toutes</b> les colonnes. Comme les cases de deux groupes ne se recoupent jamais, tout se fusionne sans conflit dans le même Sheet.</p>
+  <div class="bar"><label>Nombre de groupes <input type="number" min="0" max="60" value="${G.n}" style="width:70px" onchange="gSetN(this.value)"></label>
+  ${G.n?`<button class="btn sm" onclick="gAssign('alt')">Répartir à parts égales (en alternant)</button><button class="btn sm" onclick="gAssign('blk')">Par blocs consécutifs</button><button class="btn sm" onclick="gAssign('by')" title="${bys} structure(s) d'origine : une structure reste dans un même groupe">Par structure d'origine</button><button class="btn sm" onclick="gOff()">Désactiver les groupes</button>`:''}</div>`;
+  if(G.n){
+    h+=`<p class="sm">${P.length} problèmes · ${G.n} groupes${un?` · <b style="color:#b91c1c">${un} problème(s) sans groupe</b> (ajoutés après la répartition : affectez-les ci-dessous)`:''}</p>
+    <div class="tw"><table><tr><th>Groupe</th><th>Nom</th><th>Lignes</th></tr>${Array.from({length:G.n},(_,i)=>i+1).map(g=>`<tr><td>${g}</td><td><input value="${esc(G.names[g]||'')}" placeholder="Groupe ${g}" onchange="gRename(${g},this.value)"></td><td>${gRowsOf(g).length}</td></tr>`).join('')}</table></div>
+    <details><summary>Déplacer un problème d'un groupe à l'autre</summary><div class="tw" style="max-height:340px"><table>${P.map((p,i)=>`<tr><td>P${i+1}</td><td>${esc(p.t.length>70?p.t.slice(0,69)+'…':p.t)}</td><td><select onchange="gMove('${p.id}',this.value)"><option value="0">— aucun —</option>${Array.from({length:G.n},(_,k)=>k+1).map(g=>`<option value="${g}" ${grpOf(p.id)===g?'selected':''}>${esc(gName(g))}</option>`).join('')}</select></td></tr>`).join('')}</table></div></details>`}
+  return h+`</div>`}
+function gBar(){
+  const G=S.groups,m=myGrp(),gs=Array.from({length:G.n},(_,i)=>i+1),un=S.problems.filter(p=>!grpOf(p.id)).length;
+  const done=gs.filter(gIsDone).length;
+  let h=`<div class="card"><h2>Mon groupe</h2><div class="bar"><label>Je travaille dans :
+  <select onchange="gChoose(this.value)"><option value="" ${!m?'selected':''}>— choisir mon groupe —</option>${gs.map(g=>`<option value="${g}" ${m==String(g)?'selected':''}>${esc(gName(g))} (${gRowsOf(g).length} lignes)</option>`).join('')}<option value="all" ${m==='all'?'selected':''}>Voir tout (lecture seule)</option></select></label>
+  <button class="btn sm" onclick="GOPEN=!GOPEN;render()">${GOPEN?'Fermer la répartition':'⚙ Répartition'}</button></div>`;
+  if(m&&m!=='all'){const g=+m,r=gRowsOf(g).length;h+=`<div class="bar"><span><b>${esc(gName(g))}</b> · ${r} ligne(s) à remplir · ${gLinks(g)} lien(s) saisi(s)</span><button class="btn sm ${gIsDone(g)?'':'pri'}" onclick="gToggleDone(${g})">${gIsDone(g)?'✓ Terminé — rouvrir':'Marquer mon groupe comme terminé'}</button></div>`}
+  else h+=`<p class="mut sm">${m==='all'?'Vue complète en lecture seule : choisissez votre groupe pour modifier vos lignes.':'Choisissez votre groupe pour saisir vos lignes.'}</p>`;
+  h+=`<div class="tw"><table><tr><th>Groupe</th><th>Lignes</th><th>Liens saisis</th><th>État</th></tr>${gs.map(g=>`<tr style="${m==String(g)?'background:#ecfdf5':''}"><td>${esc(gName(g))}</td><td>${gRowsOf(g).length}</td><td>${gLinks(g)}</td><td>${gIsDone(g)?'<span class="pill g">Terminé</span>':'<span class="pill o">En cours</span>'}${gIsDone(g)&&S.gdone[g].by?' <span class="mut sm">'+esc(S.gdone[g].by)+'</span>':''}</td></tr>`).join('')}</table></div>
+  <p class="sm"><b>${done} groupe(s) sur ${G.n}</b> ont terminé${un?` · <b style="color:#b91c1c">${un} problème(s) sans groupe</b>`:''}.</p></div>`;
+  return h}
 function ph2(){
   const Pr=S.problems;if(Pr.length<2)return emptyMsg('Ajoutez au moins deux problèmes en phase 1 pour pouvoir les croiser.');
+  const on=gOn(),m=myGrp();
   const head=Pr.map((p,i)=>`<th title="${esc(p.t)}" style="text-align:center">P${i+1}</th>`).join('');
-  const body=Pr.map((a,i)=>`<tr><th title="${esc(a.t)}" style="white-space:nowrap">P${i+1} <span style="font-weight:400">${esc(a.t.length>34?a.t.slice(0,33)+'…':a.t)}</span></th>${Pr.map((b,j)=>i===j?'<td class="diag"></td>':`<td class="mc"><button class="w${+S.matrix[a.id+'|'+b.id]||0}" onclick="cyc('${a.id}','${b.id}')">${S.matrix[a.id+'|'+b.id]||''}</button></td>`).join('')}</tr>`).join('');
+  const vis=on&&m&&m!=='all'?gRowsOf(+m):Pr.map((p,i)=>({p,i}));
+  const ro=on&&!(m&&m!=='all');
+  const body=vis.map(({p:a,i})=>`<tr><th title="${esc(a.t)}" style="white-space:nowrap">P${i+1} <span style="font-weight:400">${esc(a.t.length>34?a.t.slice(0,33)+'…':a.t)}</span></th>${Pr.map((b,j)=>i===j?'<td class="diag"></td>':`<td class="mc"><button class="w${+S.matrix[a.id+'|'+b.id]||0}" ${ro?'disabled style="cursor:default"':''} onclick="cyc('${a.id}','${b.id}')">${S.matrix[a.id+'|'+b.id]||''}</button></td>`).join('')}</tr>`).join('');
   const rows=stats(),np=rows.filter(r=>r.prio).length;
-  return`<div class="card"><h2>1. Croiser les problèmes entre eux</h2>
+  const gs=on?Array.from({length:S.groups.n},(_,i)=>i+1):[],gd=gs.filter(gIsDone).length;
+  const warn=on&&gd<gs.length?`<div class="bar" style="background:#fef3c7;border-radius:8px;padding:6px 10px">⚠ Résultats provisoires : <b>${gd} groupe(s) sur ${gs.length}</b> ont terminé. Le Pareto est calculé sur tout ce qui est déjà saisi.</div>`:'';
+  return`${on?gBar()+(GOPEN?gPanel():''):`<div class="card"><div class="bar"><span><b>Travail en groupes</b> : répartissez les lignes de la matrice entre plusieurs groupes.</span><button class="btn sm pri" onclick="GOPEN=!GOPEN;render()">${GOPEN?'Fermer':'Organiser en groupes'}</button></div>${GOPEN?'':''}</div>${GOPEN?gPanel():''}`}
+  <div class="card"><h2>1. Croiser les problèmes entre eux${on&&m&&m!=='all'?' — '+esc(gName(+m)):''}</h2>
   <p class="mut">Lecture <b>en ligne</b> : « si le problème de la ligne s'aggrave, entraîne-t-il celui de la colonne ? » Cliquez sur une case pour faire varier le lien : <span class="pill">0 aucun</span> <span class="pill o">1 faible</span> <span class="pill o" style="background:#fdba74">2 moyen</span> <span class="pill r">3 fort</span></p>
-  <div class="tw"><table><tr><th></th>${head}</tr>${body}</table></div></div>
-  <div class="card"><h2>2. Score et diagramme de Pareto</h2>
+  <div class="tw mxw"><table class="mx"><tr><th></th>${head}</tr>${body}</table></div></div>
+  <div class="card"><h2>2. Score et diagramme de Pareto</h2>${warn}
   <details><summary>Comment le score est calculé</summary><p class="sm"><b>Influence exercée</b> = somme de la ligne (le problème provoque les autres). <b>Influence reçue</b> = somme de la colonne (il est provoqué par les autres). <b>Score = (exercée + reçue) × gravité</b> : un problème très connecté et grave pèse plus. Rôle : <i>Moteur</i> = exerce beaucoup et subit peu (cause racine) ; <i>Relais</i> = fortement lié dans les deux sens ; <i>Résultat</i> = surtout une conséquence ; <i>Autonome</i> = peu lié. Seuil automatique : problèmes qui cumulent les 80 % du score. Vous pouvez corriger la sélection à la main (case « Prioritaire ») ; cette correction est annulée dès qu'un lien du tableau est modifié, pour que les priorités suivent toujours le calcul.</p></details>
   ${paretoSVG(rows)}
   <div class="bar"><b>${np} problème(s) prioritaire(s)</b>${rows.some(r=>r.manual)?`<span class="pill o">Sélection modifiée manuellement (${rows.filter(r=>r.manual).length})</span>`:'<span class="pill g">Sélection calculée automatiquement</span>'}<button class="btn sm" onclick="resetSel()">Revenir au calcul automatique (seuil 80 %)</button></div>
@@ -844,7 +904,7 @@ function relayoutAround(id){
   const x0=Math.min(...c.map(i=>nodeOf(i).x));layoutComp(c,E,Math.max(0,x0))}
 /* ---- Historique local et récupération (les nœuds restaurés reçoivent de nouveaux identifiants : les suppressions déjà partagées ne les effacent pas) ---- */
 const HKEY='pbs_hist';let LASTH=0;
-const PKEYS=['tree','cartes','obj','actions','problems','matrix','mts','sel','ign','keep','parked','swot','logframe','pdca'];
+const PKEYS=['tree','cartes','obj','actions','problems','matrix','mts','sel','ign','keep','parked','swot','logframe','pdca','groups','gdone'];
 function pick(X){const o={};PKEYS.forEach(k=>{if(X[k]!==undefined)o[k]=X[k]});return o}
 function histGet(){try{return JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(e){return[]}}
 function histSnap(force){
@@ -890,7 +950,8 @@ function restoreData(src){
       S.matrix=rk(src.matrix);S.mts=rk(src.mts);S.sel=rv(src.sel);S.ign=rv(src.ign);S.keep=rv(src.keep);S.parked=rv(src.parked);
       S.swot=(src.swot||[]).map(x=>Object.assign({},x,{id:uid()}));
       if(src.logframe)S.logframe=src.logframe;if(src.pdca)S.pdca=src.pdca;
-      S.sel=S.sel||{};S.selReset=Date.now()}
+      S.sel=S.sel||{};S.selReset=Date.now();
+      {const g=src.groups||{n:0,names:{},assign:{}},as={};Object.keys(g.assign||{}).forEach(k=>{if(pm[k])as[pm[k]]=g.assign[k]});S.groups={n:g.n||0,names:Object.assign({},g.names),assign:as,ts:Date.now()};S.gdone=Object.assign({},src.gdone||{})}}
   });
   ACT=null;cfg.set('carte','');selPb=null;selN=new Set();if(RECUP)cfg.set('auto','1');save();render();closeHist()}
 function histOpen(){histRender();$('#hist').showModal()}
@@ -1104,6 +1165,9 @@ function buildTables(){
   const Pr=S.problems,rows=stats(),T={};
   T['1_QQOQCCP']=[['ID','Problème','Quoi','Qui','Où','Quand','Comment','Combien','Pourquoi','Gravité','Auteur']].concat(Pr.map((p,i)=>['P'+(i+1),p.t,p.q,p.w,p.o,p.d,p.c,p.m,p.y,p.g,p.by||'']));
   T['2_Matrice']=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(Pr.map((a,i)=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))));
+  if(gOn()){const gs=Array.from({length:S.groups.n},(_,i)=>i+1);
+    T['2_Groupes']=[['Groupe','Nom','Lignes','Liens saisis','Terminé','Par']].concat(gs.map(g=>[g,gName(g),gRowsOf(g).length,gLinks(g),gIsDone(g)?'oui':'non',(S.gdone[g]||{}).by||'']));
+    gs.forEach(g=>{T['2_Matrice_G'+g]=[['Ligne → Colonne'].concat(Pr.map((p,i)=>'P'+(i+1)))].concat(gRowsOf(g).map(({p:a,i})=>['P'+(i+1)+' '+a.t].concat(Pr.map((b,j)=>i===j?'':(+S.matrix[a.id+'|'+b.id]||0)))))})}
   T['2_Pareto']=[['Rang','ID','Problème','Exercée','Reçue','Gravité','Score','%','% cumulé','Rôle','Prioritaire']].concat(rows.map((r,k)=>[k+1,'P'+(r.i+1),r.p.t,r.act,r.pas,r.g,r.score,+r.pct.toFixed(1),+r.cum.toFixed(1),r.role,r.prio?'Oui':'Non']));
   const typ={problem:'Problème',cause:'Cause',effect:'Effet'},tx=id=>(nodeOf(id)||{}).text||'';
   if(S.swot.length)T['1_SWOT']=[['Catégorie','Élément','Auteur','Problème lié']].concat(['S','W','O','T'].flatMap(k=>S.swot.filter(x=>x.q===k).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(x=>{const pr=x.pid&&S.problems.find(p=>p.id===x.pid);return[SWQ[k][0],x.t,x.by||'',pr?'P'+(S.problems.indexOf(pr)+1)+' – '+pr.t:'']})));
@@ -1223,9 +1287,12 @@ function mergeState(L,R){
   M.actions=union(R.actions,L.actions,a=>a.id).filter(a=>!dead(a.id));
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
+  {const a=L.groups||{},b=R.groups||{},o=(a.ts||0)>=(b.ts||0)?a:b;M.groups={n:o.n||0,names:Object.assign({},o.names),assign:{},ts:o.ts||0};
+    Object.keys(o.assign||{}).forEach(k=>{if(pid.has(k))M.groups.assign[k]=o.assign[k]})}
+  M.gdone={};new Set([...Object.keys(R.gdone||{}),...Object.keys(L.gdone||{})]).forEach(k=>{const a=(L.gdone||{})[k],b=(R.gdone||{})[k];M.gdone[k]=!a?b:!b?a:((a.ts||0)>=(b.ts||0)?a:b)});
   dedupeState(M);
   return M}
-const sigOf=s=>JSON.stringify([s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.swot,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
+const sigOf=s=>JSON.stringify([s.groups,s.gdone,s.title,s.problems,s.matrix,s.sel,s.selReset,s.parked,s.keep,s.noImp,s.cartes,s.swot,s.tree,s.actions,s.logframe,s.obj,s.pdca,s.whys,s.ishi,s.map,s.ign,s.mts,s.tomb]);
 const sig=()=>sigOf(S);
 let dragging=false,syncing=false;
 function refreshView(){const a=document.activeElement;if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;render()}
