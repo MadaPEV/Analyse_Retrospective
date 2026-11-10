@@ -358,6 +358,9 @@ function gAssign(mode,quiet){const G=S.groups,n=G.n,P=S.problems;if(!n)return;
   else{const by={};P.forEach(p=>{const k=(p.by||'—').trim()||'—';(by[k]=by[k]||[]).push(p)});
     const load=Array(n).fill(0);Object.values(by).sort((a,b)=>b.length-a.length).forEach(L=>{let g=0;for(let j=1;j<n;j++)if(load[j]<load[g])g=j;load[g]+=L.length;L.forEach(p=>{as[p.id]=g+1})})}
   G.assign=as;gTouch();save();render()}
+function gAutoNew(){const G=S.groups;if(!G.n)return false;const cnt=Array(G.n+1).fill(0);S.problems.forEach(p=>{const g=grpOf(p.id);if(g>=1&&g<=G.n)cnt[g]++});
+  let ch=false;S.problems.forEach(p=>{const g=grpOf(p.id);if(g>=1&&g<=G.n)return;let b=1;for(let j=2;j<=G.n;j++)if(cnt[j]<cnt[b])b=j;G.assign[p.id]=b;cnt[b]++;ch=true});
+  if(ch){gTouch();save()}return ch}
 function gMove(pid,g){S.groups.assign[pid]=+g;gTouch();save();render()}
 function gRename(g,v){S.groups.names[g]=v.trim();gTouch();save()}
 function gOff(){if(!confirm('Désactiver le travail en groupes ? La matrice redevient complète et modifiable par tous. Les liens déjà saisis sont conservés.'))return;S.groups.n=0;gTouch();save();render()}
@@ -370,8 +373,9 @@ function gPanel(){
   <div class="bar"><label>Nombre de groupes <input type="number" min="0" max="60" value="${G.n}" style="width:70px" onchange="gSetN(this.value)"></label>
   ${G.n?`<button class="btn sm" onclick="gAssign('alt')">Répartir à parts égales (en alternant)</button><button class="btn sm" onclick="gAssign('blk')">Par blocs consécutifs</button><button class="btn sm" onclick="gAssign('by')" title="${bys} structure(s) d'origine : une structure reste dans un même groupe">Par structure d'origine</button><button class="btn sm" onclick="gOff()">Désactiver les groupes</button>`:''}</div>`;
   if(G.n){
-    h+=`<p class="sm">${P.length} problèmes · ${G.n} groupes${un?` · <b style="color:#b91c1c">${un} problème(s) sans groupe</b> (ajoutés après la répartition : affectez-les ci-dessous)`:''}</p>
+    h+=`<p class="sm">${P.length} problèmes · ${G.n} groupes${un?` · <b style="color:#b91c1c">${un} problème(s) sans groupe</b> (à affecter ci-dessous)`:''}</p>
     <div class="tw"><table><tr><th>Groupe</th><th>Nom</th><th>Lignes</th></tr>${Array.from({length:G.n},(_,i)=>i+1).map(g=>`<tr><td>${g}</td><td><input value="${esc(G.names[g]||'')}" placeholder="Groupe ${g}" onchange="gRename(${g},this.value)"></td><td>${gRowsOf(g).length}</td></tr>`).join('')}</table></div>
+    <p class="sm">Les nouveaux problèmes ajoutés en phase 1 sont affectés <b>automatiquement</b> au groupe qui a le moins de lignes.</p>
     <details><summary>Déplacer un problème d'un groupe à l'autre</summary><div class="tw" style="max-height:340px"><table>${P.map((p,i)=>`<tr><td>P${i+1}</td><td>${esc(p.t.length>70?p.t.slice(0,69)+'…':p.t)}</td><td><select onchange="gMove('${p.id}',this.value)"><option value="0">— aucun —</option>${Array.from({length:G.n},(_,k)=>k+1).map(g=>`<option value="${g}" ${grpOf(p.id)===g?'selected':''}>${esc(gName(g))}</option>`).join('')}</select></td></tr>`).join('')}</table></div></details>`}
   return h+`</div>`}
 function gBar(){
@@ -387,7 +391,7 @@ function gBar(){
   return h}
 function ph2(){
   const Pr=S.problems;if(Pr.length<2)return emptyMsg('Ajoutez au moins deux problèmes en phase 1 pour pouvoir les croiser.');
-  const on=gOn(),m=myGrp();
+  gAutoNew();const on=gOn(),m=myGrp();
   const head=Pr.map((p,i)=>`<th title="${esc(p.t)}" style="text-align:center">P${i+1}</th>`).join('');
   const vis=on&&m&&m!=='all'?gRowsOf(+m):Pr.map((p,i)=>({p,i}));
   const ro=on&&!(m&&m!=='all');
@@ -1288,7 +1292,8 @@ function mergeState(L,R){
   M.logframe=union(R.logframe,L.logframe,r=>r.id).filter(r=>!dead(r.id));
   ['whys','ishi','map','obj','pdca','noImp'].forEach(k=>{M[k]=dict(R[k],L[k])});
   {const a=L.groups||{},b=R.groups||{},o=(a.ts||0)>=(b.ts||0)?a:b;M.groups={n:o.n||0,names:Object.assign({},o.names),assign:{},ts:o.ts||0};
-    Object.keys(o.assign||{}).forEach(k=>{if(pid.has(k))M.groups.assign[k]=o.assign[k]})}
+    Object.keys(o.assign||{}).forEach(k=>{if(pid.has(k))M.groups.assign[k]=o.assign[k]});
+    const q=o===a?b:a;Object.keys(q.assign||{}).forEach(k=>{if(pid.has(k)&&!M.groups.assign[k]&&q.assign[k]<=M.groups.n)M.groups.assign[k]=q.assign[k]})}
   M.gdone={};new Set([...Object.keys(R.gdone||{}),...Object.keys(L.gdone||{})]).forEach(k=>{const a=(L.gdone||{})[k],b=(R.gdone||{})[k];M.gdone[k]=!a?b:!b?a:((a.ts||0)>=(b.ts||0)?a:b)});
   dedupeState(M);
   return M}
