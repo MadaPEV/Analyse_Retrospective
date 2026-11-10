@@ -219,7 +219,9 @@ function render(){
   if(P===3){if(ACT&&!SW)reswap()}else unswap();
   $('#steps').innerHTML=PH.map((p,i)=>`<button class="${P===i+1?'on':''}" onclick="go(${i+1})"><b>${p[0]}</b>${p[1]}</button>`).join('');
   $('#ptitle').value=S.title||'';
+  const mx=document.querySelector('.mxw'),sc=mx&&P===2?[mx.scrollLeft,mx.scrollTop]:null;
   $('#view').innerHTML=PHF[P-1]();
+  if(sc){const n=document.querySelector('.mxw');if(n){n.scrollLeft=sc[0];n.scrollTop=sc[1]}}
   if(P===3&&repn()==='t')initTree();
   if(P===4&&p4==='act')initDots();
 }
