@@ -62,7 +62,9 @@ td.diag{background:#e5e7eb}
 .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;background:#e5e7eb}
 .pill.g{background:#d1fae5;color:#065f46}.pill.o{background:#fde68a;color:#78350f}.pill.b{background:#dbeafe;color:#1e3a8a}.pill.r{background:#fee2e2;color:#991b1b}
 /* tree */
-.p3{display:grid;grid-template-columns:340px 1fr;gap:14px;align-items:start}
+.p3{display:block}
+.pbsel{display:flex;align-items:center;gap:8px;margin:2px 0 8px;flex-wrap:wrap}.pbsel label{margin:0;font-weight:700;white-space:nowrap}.pbsel select{flex:1;min-width:220px;max-width:640px;width:auto}
+.ibtn{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#0f3d3e;color:#fff;font:700 11px/1 Georgia,serif;cursor:help;flex:none}
 #cv{height:640px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#fafbfc;background-image:radial-gradient(#d5dae0 1px,transparent 1px);background-size:22px 22px}
 #stage{position:relative}
 #ed{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
@@ -177,7 +179,7 @@ details summary{cursor:pointer;font-weight:600}
 
 <script>
 /* Liaison par défaut : les utilisateurs n'ont rien à configurer. Un administrateur peut la modifier ici. */
-const DEFAULTS={url:'https://script.google.com/macros/s/AKfycby5A5KdR-vz3K0ePmyLuNKBh6-4kqgBBHGGv3lJvOToX_Vq-Yrh9KWYoseo8huOoySiDA/exec',token:''};
+const DEFAULTS={url:'https://script.google.com/macros/s/AKfycbyv6qptR57BRnTkNiiP2ej8U3z7it2yg3fvhn5c0W9DLSr2MKiRaG0AX9YzgFrVJe_J9w/exec',token:''};
 const SHEET_URL='https://docs.google.com/spreadsheets/d/1Kr7LsNXrBQMuYUElNAfOQ55OS4P67fg7ofREqVz9Ta8/edit?gid=0#gid=0';
 const $=(s,r=document)=>r.querySelector(s);
 const uid=()=>Math.random().toString(36).slice(2,9);
@@ -432,8 +434,9 @@ function p3banners(){
   if(stale.length)o+=`<div class="card" style="border-color:#f59e0b;background:#fffbeb"><h3 style="margin-top:0">Ne sont plus prioritaires (${stale.length})</h3><p class="sm mut">Ces problèmes figurent dans l'arbre mais ne sont plus parmi les priorités de la phase 2. Mettez-les de côté pour les sauvegarder avec toute leur analyse (causes, effets, 5 Pourquoi / Ishikawa, objectifs) : ils reviendront automatiquement s'ils redeviennent prioritaires.</p>${stale.map(n=>`<div class="or"><b>${pnum(n.pid)}</b> ${esc(n.text)}<div class="bar"><button class="btn sm pri" onclick="parkProblem('${n.pid}')">Mettre de côté (récupérable)</button><button class="btn sm" onclick="keepPb('${n.pid}')">Garder dans l'arbre</button></div></div>`).join('')}</div>`;
   if(pk.length)o+=`<details class="card"><summary>Problèmes mis de côté (${pk.length})</summary>${pk.map(k=>{const b=S.parked[k];return`<div class="or"><b>${pnum(k)}</b> ${esc(b.label)} <span class="mut sm">· ${b.nodes.length-1} élément(s) d'analyse · ${new Date(b.ts).toLocaleDateString('fr-FR')}${b.by?' · '+esc(b.by):''}</span> ${isPrio(k)?'<span class="pill g">redevenu prioritaire</span>':''}<div class="bar"><button class="btn sm" onclick="restoreClick('${k}')">Restaurer dans l'arbre</button><button class="btn sm bad" onclick="delPark('${k}')">Supprimer</button></div></div>`}).join('')}</details>`;
   return o}
-function seedBranches(pb){
-  if(pb.seeded||S.tree.edges.some(e=>e.to===pb.id&&CATS.includes((nodeOf(e.from)||{}).cat)))return;
+function hasBranches(pb){return S.tree.edges.some(e=>e.to===pb.id&&CATS.includes((nodeOf(e.from)||{}).cat))}
+function seedBranches(pb,force){
+  if(!pb||hasBranches(pb)||(!force&&(pb.seeded||causesOf(pb.id).length)))return;
   pb.seeded=true;const br={};
   CATS.forEach((c,i)=>{const n=addNode('cause',c,pb.x+(i-2.5)*190,pb.y+130);n.cat=c;ensureEdge(n.id,pb.id);br[c]=n});
   causesOf(pb.id).filter(n=>CATS.includes(n.cat)&&!(n.text===n.cat&&br[n.cat]===n)).forEach(n=>{
@@ -441,22 +444,22 @@ function seedBranches(pb){
   relayoutAround(pb.id);save()}
 function ph3(){
   autoImportPrio();
-  S.tree.nodes.filter(n=>n.type==='problem').forEach(seedBranches);
   const banners=p3banners();
   const pbs=S.tree.nodes.filter(n=>n.type==='problem');
   if(selPb===null&&!SW&&cfg.get('pb'))selPb=cfg.get('pb');
   if(!pbs.find(n=>n.id===selPb))selPb=pbs.length?pbs[0].id:null;
   if(!SW){cfg.set('pb',selPb||'');mainPb=selPb}
-  const pb=nodeOf(selPb);VS=viewSet();HID=foldHidden(baseNodes());calcHYM();
+  const pb=nodeOf(selPb);if(pb&&!SW)seedBranches(pb);VS=viewSet();HID=foldHidden(baseNodes());calcHYM();
   let helper='';
   if(!pb)helper='<p class="mut">Ajoutez un nœud « Problème » dans l\'arbre (ou cliquez sur « Mettre à jour la carte » pour importer les problèmes prioritaires) pour analyser ses causes.</p>';
   else{
-    helper=`<label>Problème analysé <span class="mut" style="font-weight:400">· vue de la carte</span></label><select onchange="selPb=this.value;selN=new Set();render()" title="Le problème choisi ici est le seul affiché dans la carte">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,60))}</option>`).join('')}</select>`;
-    helper+='<p class="mut sm">Les 6 composantes du PEV (Ishikawa) sont créées par défaut sous le problème. Sur chaque branche, cliquez sur « + cause » pour ajouter une cause, puis sur « + cause » de cette cause pour la décliner (pourquoi ?), et ainsi de suite jusqu’à la cause racine.</p>';
+    helper=`<div class="pbsel"><label>Problème analysé :</label><select onchange="selPb=this.value;selN=new Set();render()" title="Le problème choisi ici est le seul affiché dans la carte">${pbs.map(n=>`<option value="${n.id}" ${n.id===selPb?'selected':''}>${esc(n.text.slice(0,70))}</option>`).join('')}</select>`;
+    if(!hasBranches(pb))helper+='<button class="btn sm" onclick="seedBranches(nodeOf(selPb),true);render()" title="Ajoute Logistique, Chaîne de froid, Surveillance, Vaccination, Communication, Données et SE ; vos causes déjà classées sont rangées dessous">+ Ajouter les 6 composantes du PEV</button>';
+    helper+='<span class="ibtn" tabindex="0" title="Le problème choisi ici est le seul affiché dans la carte. Les 6 composantes du PEV (Ishikawa) sont créées par défaut sous un nouveau problème. Sur chaque branche, cliquez sur « + cause » pour ajouter une cause, puis sur « + cause » de cette cause pour la décliner (pourquoi ?), et ainsi de suite jusqu’à la cause racine.">i</span></div>';
   }
-  return`${banners}<div class="p3"><aside class="card"><h2>Problème analysé</h2>
-   ${helper}</aside>
+  return`${banners}<div class="p3">
   <section class="card"><h2>Arbre à problèmes</h2>
+   ${helper}
    ${carteBar()}
    ${viewNote()}
    ${repBar()}${repn()==='f'?fishView():treeUI()}</section></div>`;
@@ -862,6 +865,10 @@ function restoreData(src){
     const map={};
     (S.problems||[]).forEach(p=>tomb(p.id));
     S.tree.nodes.forEach(n=>tomb(n.id));S.tree.edges.forEach(e=>tomb('e:'+e.from+'>'+e.to));
+    /* l'ancienne copie (identifiants d'origine) est déclarée supprimée : sinon la fusion avec le Sheet la ferait revenir en double */
+    (src.problems||[]).forEach(p=>tomb(p.id));
+    const tsrc=t=>{(t&&t.nodes||[]).forEach(n=>tomb(n.id));(t&&t.edges||[]).forEach(e=>tomb('e:'+e.from+'>'+e.to))};
+    tsrc(src.tree);Object.keys(src.cartes||{}).forEach(k=>{tomb('carte:'+k);tsrc(src.cartes[k])});(src.swot||[]).forEach(x=>tomb(x.id));
     const base=src.tree||{nodes:[],edges:[]};
     (src.tree&&src.tree.nodes||[]).forEach(n=>{map[n.id]=uid()});
     const ids=Object.assign({},map),pm={};
@@ -1146,8 +1153,11 @@ async function testLink(){
   syncing=false;await syncNow(true);
   if($('#status').className!=='ok'){upd(k,false,'L’écriture a échoué',esc($('#status').textContent));return}
   let r2;try{r2=JSON.parse(await(await fetch(url+sep+'action=load&token='+tok)).text())}catch(e){upd(k,false,'Écriture envoyée mais relecture impossible',esc(niceErr(e)));return}
-  const okw=r2&&r2.ok&&r2.rev>r.rev;
-  upd(k,okw,okw?'Écriture confirmée — version '+r2.rev:'Écriture non confirmée','Après envoi, le Sheet contient : '+sum(r2.state)+(okw?'':'<br>La version n’a pas augmenté : vérifiez que le déploiement est à jour.'));
+  let loc=null;withMain(()=>{loc=[S.problems.length,S.tree.nodes.length,S.tree.edges.length]});
+  const rem=r2&&r2.state?[(r2.state.problems||[]).length,((r2.state.tree||{}).nodes||[]).length,((r2.state.tree||{}).edges||[]).length]:null;
+  const same=!!rem&&rem.join()===loc.join();
+  const okw=r2&&r2.ok&&(r2.rev>r.rev||same);
+  upd(k,okw,okw?(r2.rev>r.rev?'Écriture confirmée — version '+r2.rev:'Rien à envoyer : le Sheet est déjà identique à l’outil'):'Écriture non confirmée','Dans l’outil : '+loc[0]+' problème(s) · '+loc[1]+' nœud(s) · '+loc[2]+' lien(s).<br>Après envoi, le Sheet contient : '+sum(r2.state)+(okw?'':'<br>Le Sheet diffère de l’outil et la version n’a pas augmenté : vérifiez que le déploiement est à jour (nouvelle version) et que <code>GEL</code> vaut <code>false</code>.'));
   if(okw)add(true,'Affichage dans l’outil','Ces données sont chargées automatiquement à l’ouverture puis dès qu’un autre acteur enregistre (contrôle toutes les 15 s) ; les problèmes des autres acteurs apparaissent dans le bloc « autres acteurs » de la phase 1. Dans le Sheet, ouvrez les onglets <code>1_QQOQCCP</code>, <code>2_Matrice</code>, <code>2_Pareto</code>, <code>3_Arbre</code>… (l’onglet <code>_DATA</code> est la sauvegarde technique).')}
 async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("l'URL n'a pas répondu comme le script. Vérifiez qu'il s'agit de l'URL de l'application web (…/exec), que l'accès est réglé sur « Tous » et que la dernière version est déployée.")}}
 
@@ -1157,6 +1167,17 @@ async function readJSON(r){const t=await r.text();try{return JSON.parse(t)}catch
 let DD={};
 function dedupeState(s){
   const T=s.tree,groups={};let removed=0;
+  /* composantes PEV orphelines (sans problème) ou en double sous un même problème : retirées et marquées supprimées */
+  {const isB=n=>n.type==='cause'&&CATS.includes(n.cat)&&n.text===n.cat,byId={};T.nodes.forEach(n=>byId[n.id]=n);
+    const seenB=new Set(),drop=new Set();
+    T.nodes.filter(isB).sort((x,y)=>x.id<y.id?-1:1).forEach(n=>{
+      const outs=T.edges.filter(e=>e.from===n.id&&byId[e.to]&&byId[e.to].type==='problem');
+      if(!outs.length){drop.add(n.id);return}
+      const k=outs[0].to+'|'+n.cat;if(seenB.has(k)){
+        const kids=T.edges.filter(e=>e.to===n.id);if(!kids.length)drop.add(n.id)}else seenB.add(k)});
+    if(drop.size){drop.forEach(id=>{s.tomb[id]=Date.now()});
+      T.edges.filter(e=>drop.has(e.from)||drop.has(e.to)).forEach(e=>{s.tomb['e:'+e.from+'>'+e.to]=Date.now()});
+      T.nodes=T.nodes.filter(n=>!drop.has(n.id));T.edges=T.edges.filter(e=>!drop.has(e.from)&&!drop.has(e.to))}}
   T.nodes.filter(n=>n.type==='problem').forEach(n=>{if(!n.pid)return;const k='p:'+n.pid;(groups[k]=groups[k]||[]).push(n)});
   Object.values(groups).forEach(g=>{
     if(g.length<2)return;g.sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0);const keep=g[0];
